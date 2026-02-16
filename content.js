@@ -73,33 +73,32 @@ let filteredTabs = [];
 
 // Функция для получения URL иконки
 function getFaviconUrl(tab) {
-  if (!tab.url) {
-    return getFallbackIcon();
+  // Сначала пробуем использовать favIconUrl из объекта tab
+  if (tab.favIconUrl) {
+    return tab.favIconUrl;
   }
   
-  try {
-    const url = new URL(tab.url);
-    
-    // Для chrome:// и chrome-extension:// страниц используем специальную обработку
-    if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
-      // Для системных страниц пробуем использовать favIconUrl, если есть
-      if (tab.favIconUrl) {
-        return tab.favIconUrl;
+  // Если favIconUrl нет, пробуем получить через URL
+  if (tab.url) {
+    try {
+      const url = new URL(tab.url);
+      
+      // Для chrome:// и chrome-extension:// страниц используем fallback
+      if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
+        return getFallbackIcon();
       }
-      // Иначе используем fallback
+      
+      // Для обычных страниц пробуем получить favicon через домен
+      // Используем простой способ - через favicon.ico на домене
+      return `${url.protocol}//${url.hostname}/favicon.ico`;
+    } catch (e) {
+      // Если URL невалидный, используем fallback
       return getFallbackIcon();
     }
-    
-    // Для обычных веб-страниц всегда используем Google Favicon Service
-    // Это работает для всех вкладок, включая неактивные
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`;
-  } catch (e) {
-    // Если URL невалидный, пробуем favIconUrl
-    if (tab.favIconUrl) {
-      return tab.favIconUrl;
-    }
-    return getFallbackIcon();
   }
+  
+  // Fallback иконка
+  return getFallbackIcon();
 }
 
 // Получить fallback иконку
@@ -206,7 +205,14 @@ function attachTabListeners() {
         return;
       }
       
-      chrome.runtime.sendMessage({ action: 'switchTab', tabId });
+      chrome.runtime.sendMessage({ action: 'switchTab', tabId }).then(() => {
+        // Обновляем панель после переключения с небольшой задержкой
+        setTimeout(() => {
+          if (panelVisible) {
+            loadTabs();
+          }
+        }, 300);
+      });
     });
   });
 
@@ -241,14 +247,8 @@ function filterTabs(searchTerm) {
   renderTabs();
 }
 
-// Обработка ошибки загрузки favicon (только одна попытка исправления)
+// Обработка ошибки загрузки favicon
 function handleFaviconError(img) {
-  // Если уже была попытка исправления, сразу показываем fallback
-  if (img.dataset.errorHandled === 'true') {
-    img.src = getFallbackIcon();
-    return;
-  }
-  
   const tabItem = img.closest('.tabs-tab-item');
   if (!tabItem) {
     img.src = getFallbackIcon();
@@ -258,31 +258,30 @@ function handleFaviconError(img) {
   const tabUrl = tabItem.dataset.tabUrl;
   const currentSrc = img.src;
   
-  // Если текущий источник - это Google Favicon Service, пробуем другой размер
-  if (currentSrc.includes('google.com/s2/favicons')) {
-    try {
-      const url = new URL(tabUrl);
-      // Пробуем другой размер
-      img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`;
-      img.dataset.errorHandled = 'true'; // Отмечаем, что была попытка
-    } catch (e) {
-      img.src = getFallbackIcon();
-    }
+  // Если уже пробовали favicon.ico, показываем fallback
+  if (currentSrc.includes('/favicon.ico')) {
+    img.src = getFallbackIcon();
+    img.onerror = null; // Отключаем дальнейшие попытки
     return;
   }
   
-  // Если это был favIconUrl, пробуем Google Favicon Service
+  // Если это был favIconUrl или другой источник, пробуем favicon.ico
   if (tabUrl) {
     try {
       const url = new URL(tabUrl);
-      img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`;
-      img.dataset.errorHandled = 'true';
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        img.src = `${url.protocol}//${url.hostname}/favicon.ico`;
+        img.dataset.errorHandled = 'true';
+        return;
+      }
     } catch (e) {
-      img.src = getFallbackIcon();
+      // Если не удалось распарсить URL, показываем fallback
     }
-  } else {
-    img.src = getFallbackIcon();
   }
+  
+  // В любом другом случае показываем fallback
+  img.src = getFallbackIcon();
+  img.onerror = null; // Отключаем дальнейшие попытки
 }
 
 // Экранирование HTML
@@ -323,10 +322,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.action === 'refreshTabs') {
     if (tabsPanel && panelVisible) {
-      // Небольшая задержка, чтобы избежать конфликтов при быстром переключении
-      setTimeout(() => {
+      // Обновляем только если панель видима и не было недавнего обновления
+      const now = Date.now();
+      if (!window.lastTabRefresh || now - window.lastTabRefresh > 500) {
+        window.lastTabRefresh = now;
         loadTabs();
-      }, 100);
+      }
     }
   }
   return true;

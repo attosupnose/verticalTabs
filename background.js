@@ -68,8 +68,11 @@ chrome.tabs.onRemoved.addListener(() => {
   broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
-chrome.tabs.onUpdated.addListener(() => {
-  broadcastToAllTabs({ action: 'refreshTabs' });
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Обновляем только при изменении favicon или статуса загрузки
+  if (changeInfo.favIconUrl || changeInfo.status === 'complete') {
+    broadcastToAllTabs({ action: 'refreshTabs' });
+  }
 });
 
 // Отправка сообщения во все вкладки
