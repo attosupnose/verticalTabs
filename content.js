@@ -92,7 +92,7 @@ let allTabs = [];
 let filteredTabs = [];
 let currentWindowId = null;
 
-// Функция для получения URL иконки
+// Функция для получения URL иконки (начальный источник)
 function getFaviconUrl(tab) {
   // Сначала пробуем использовать favIconUrl из объекта tab
   if (tab.favIconUrl) {
@@ -111,9 +111,16 @@ function getFaviconUrl(tab) {
         return getFallbackIcon();
       }
       
-      // Для обычных страниц используем data URL placeholder
-      // Реальная загрузка произойдет через background script если нужно
-      console.log('[Tabs Extension] No favIconUrl for tab', tab.id, 'will try async load');
+      // Для обычных страниц пробуем получить favicon напрямую по URL
+      // Используем Google Favicon Service как начальный источник (быстро и надежно)
+      const faviconUrls = getFaviconUrlsFromTabUrl(tab.url);
+      if (faviconUrls.length > 0) {
+        // Используем Google Favicon Service как первый вариант
+        console.log('[Tabs Extension] Using Google Favicon Service for tab', tab.id);
+        return faviconUrls[1] || faviconUrls[0]; // faviconUrls[1] это Google Favicon Service
+      }
+      
+      console.log('[Tabs Extension] No favicon URLs generated for tab', tab.id);
       return getFallbackIcon();
     } catch (e) {
       console.warn('[Tabs Extension] Invalid URL for tab', tab.id, tab.url, e);
@@ -126,21 +133,93 @@ function getFaviconUrl(tab) {
   return getFallbackIcon();
 }
 
+// Различные способы получения favicon URL
+function getFaviconUrlsFromTabUrl(tabUrl) {
+  if (!tabUrl) return [];
+  
+  try {
+    const url = new URL(tabUrl);
+    
+    // Пропускаем chrome:// и chrome-extension://
+    if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
+      return [];
+    }
+    
+    const urls = [];
+    const baseUrl = `${url.protocol}//${url.hostname}`;
+    
+    // 1. Стандартный favicon.ico на корне домена
+    urls.push(`${baseUrl}/favicon.ico`);
+    
+    // 2. Google Favicon Service (работает для большинства сайтов)
+    urls.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`);
+    
+    // 3. DuckDuckGo Favicon Service (альтернатива)
+    urls.push(`https://icons.duckduckgo.com/ip3/${encodeURIComponent(url.hostname)}.ico`);
+    
+    // 4. Favicon через домен с размером (некоторые сайты поддерживают)
+    urls.push(`${baseUrl}/favicon-32x32.png`);
+    urls.push(`${baseUrl}/apple-touch-icon.png`);
+    
+    return urls;
+  } catch (e) {
+    console.warn('[Tabs Extension] Invalid URL for favicon:', tabUrl, e);
+    return [];
+  }
+}
+
 // Асинхронная загрузка favicon для вкладки (для неактивных вкладок)
+// Пробует несколько методов по очереди
 async function loadTabFavicon(tabId, imgElement) {
   console.log('[Tabs Extension] Attempting to load favicon for tab', tabId);
+  
+  // Метод 1: Через background script (получение favIconUrl из chrome.tabs)
   try {
     const result = await chrome.runtime.sendMessage({ action: 'getTabFavicon', tabId });
-    console.log('[Tabs Extension] Favicon result for tab', tabId, result);
+    console.log('[Tabs Extension] Method 1 (background script) result for tab', tabId, result);
     if (result && result.favIconUrl && imgElement.src !== result.favIconUrl) {
-      console.log('[Tabs Extension] Setting favicon for tab', tabId, 'to', result.favIconUrl);
+      console.log('[Tabs Extension] Setting favicon from background script:', result.favIconUrl);
       imgElement.src = result.favIconUrl;
-    } else {
-      console.log('[Tabs Extension] No favicon available for tab', tabId);
+      return; // Успешно загрузили через background script
     }
   } catch (e) {
-    console.error('[Tabs Extension] Error loading favicon for tab', tabId, e);
+    console.warn('[Tabs Extension] Method 1 failed for tab', tabId, e);
   }
+  
+  // Метод 2: Получаем URL вкладки и пробуем загрузить favicon напрямую
+  try {
+    const tabResult = await chrome.runtime.sendMessage({ action: 'getTabInfo', tabId });
+    if (tabResult && tabResult.url) {
+      const faviconUrls = getFaviconUrlsFromTabUrl(tabResult.url);
+      console.log('[Tabs Extension] Method 2: Trying URLs from tab URL:', faviconUrls);
+      
+      // Пробуем загрузить первый доступный favicon
+      for (const faviconUrl of faviconUrls) {
+        try {
+          // Проверяем доступность через fetch
+          const response = await fetch(faviconUrl, { method: 'HEAD', mode: 'no-cors' });
+          console.log('[Tabs Extension] Trying favicon URL:', faviconUrl);
+          imgElement.src = faviconUrl;
+          return; // Успешно установили URL
+        } catch (e) {
+          // Пробуем следующий URL
+          continue;
+        }
+      }
+      
+      // Если fetch не сработал (CORS), просто пробуем установить первый URL
+      // Браузер сам попробует загрузить
+      if (faviconUrls.length > 0) {
+        console.log('[Tabs Extension] Setting favicon URL (will try to load):', faviconUrls[0]);
+        imgElement.src = faviconUrls[0];
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('[Tabs Extension] Method 2 failed for tab', tabId, e);
+  }
+  
+  console.log('[Tabs Extension] All methods failed for tab', tabId);
 }
 
 // Получить fallback иконку

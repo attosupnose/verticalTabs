@@ -58,6 +58,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'getTabInfo') {
+    chrome.tabs.get(message.tabId).then(tab => {
+      sendResponse({ url: tab.url || null, title: tab.title || null });
+    }).catch(() => {
+      sendResponse({ url: null, title: null });
+    });
+    return true;
+  }
+
   if (message.action === 'switchTab') {
     chrome.tabs.get(message.tabId).then(tab => {
       chrome.tabs.update(message.tabId, { active: true });
