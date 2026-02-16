@@ -73,16 +73,22 @@ let filteredTabs = [];
 
 // Функция для получения URL иконки
 function getFaviconUrl(tab) {
-  // Используем chrome://favicon/ протокол для надежной загрузки иконок
-  // Этот протокол работает для всех типов страниц
-  if (tab.url) {
-    // chrome://favicon/ работает для всех URL, включая chrome:// страницы
-    return `chrome://favicon/${tab.url}`;
-  }
-  // Если есть favIconUrl, используем его
+  // Сначала пробуем использовать favIconUrl из объекта tab
   if (tab.favIconUrl) {
     return tab.favIconUrl;
   }
+  
+  // Если favIconUrl нет, пробуем получить иконку через Google Favicon Service
+  if (tab.url) {
+    try {
+      const url = new URL(tab.url);
+      // Используем Google Favicon Service как fallback
+      return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+    } catch (e) {
+      // Если URL невалидный, используем fallback
+    }
+  }
+  
   // Fallback иконка
   return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
 }
@@ -122,8 +128,8 @@ function renderTabs() {
       const tabTitle = tab.title || 'Без названия';
       
       return `
-        <div class="tabs-tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" title="${escapeHtml(tabTitle)}">
-          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 16 16\\'><rect width=\\'16\\' height=\\'16\\' fill=\\'%23999\\' rx=\\'2\\'/></svg>';">
+        <div class="tabs-tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" data-tab-url="${escapeHtml(tab.url || '')}" title="${escapeHtml(tabTitle)}">
+          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" crossorigin="anonymous" onerror="handleFaviconError(this)">
           <div class="tabs-tab-actions">
             <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
           </div>
@@ -139,8 +145,8 @@ function renderTabs() {
       const tabTitle = tab.title || 'Без названия';
       
       return `
-        <div class="tabs-tab-item" data-tab-id="${tab.id}" title="${escapeHtml(tabTitle)}">
-          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 16 16\\'><rect width=\\'16\\' height=\\'16\\' fill=\\'%23999\\' rx=\\'2\\'/></svg>';">
+        <div class="tabs-tab-item" data-tab-id="${tab.id}" data-tab-url="${escapeHtml(tab.url || '')}" title="${escapeHtml(tabTitle)}">
+          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" crossorigin="anonymous" onerror="handleFaviconError(this)">
           <div class="tabs-tab-actions">
             <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
           </div>
@@ -212,6 +218,32 @@ function filterTabs(searchTerm) {
     });
   }
   renderTabs();
+}
+
+// Обработка ошибки загрузки favicon
+function handleFaviconError(img) {
+  const tabItem = img.closest('.tabs-tab-item');
+  if (!tabItem) return;
+  
+  const tabUrl = tabItem.dataset.tabUrl;
+  if (tabUrl) {
+    try {
+      const url = new URL(tabUrl);
+      // Пробуем загрузить через Google Favicon Service
+      img.src = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+      img.onerror = function() {
+        // Если и это не сработало, показываем fallback
+        this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+        this.onerror = null;
+      };
+    } catch (e) {
+      img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+      img.onerror = null;
+    }
+  } else {
+    img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+    img.onerror = null;
+  }
 }
 
 // Экранирование HTML
