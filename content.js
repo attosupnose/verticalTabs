@@ -73,36 +73,33 @@ let filteredTabs = [];
 
 // Функция для получения URL иконки
 function getFaviconUrl(tab) {
-  // Сначала пробуем использовать favIconUrl из объекта tab (если есть)
-  if (tab.favIconUrl && tab.favIconUrl.startsWith('http')) {
-    return tab.favIconUrl;
+  if (!tab.url) {
+    return getFallbackIcon();
   }
   
-  // Для неактивных вкладок favIconUrl часто пустой, используем альтернативные методы
-  if (tab.url) {
-    try {
-      const url = new URL(tab.url);
-      // Для chrome:// и chrome-extension:// страниц используем специальную обработку
-      if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
-        // Для системных страниц пробуем использовать favIconUrl, если есть
-        if (tab.favIconUrl) {
-          return tab.favIconUrl;
-        }
-        // Иначе используем fallback
-        return getFallbackIcon();
-      }
-      // Для обычных страниц используем Google Favicon Service (надежнее для неактивных вкладок)
-      return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`;
-    } catch (e) {
-      // Если URL невалидный, пробуем favIconUrl
+  try {
+    const url = new URL(tab.url);
+    
+    // Для chrome:// и chrome-extension:// страниц используем специальную обработку
+    if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
+      // Для системных страниц пробуем использовать favIconUrl, если есть
       if (tab.favIconUrl) {
         return tab.favIconUrl;
       }
+      // Иначе используем fallback
+      return getFallbackIcon();
     }
+    
+    // Для обычных веб-страниц всегда используем Google Favicon Service
+    // Это работает для всех вкладок, включая неактивные
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`;
+  } catch (e) {
+    // Если URL невалидный, пробуем favIconUrl
+    if (tab.favIconUrl) {
+      return tab.favIconUrl;
+    }
+    return getFallbackIcon();
   }
-  
-  // Fallback иконка
-  return getFallbackIcon();
 }
 
 // Получить fallback иконку
@@ -148,8 +145,10 @@ function renderTabs() {
 
 // Рендеринг списка вкладок через DOM API для правильного экранирования
 function renderTabsList(container, tabs, activeTab) {
-  // Очищаем контейнер
-  container.innerHTML = '';
+  // Очищаем контейнер безопасным способом
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
   
   tabs.forEach(tab => {
     const isActive = activeTab && tab.id === activeTab.id;
@@ -244,6 +243,12 @@ function filterTabs(searchTerm) {
 
 // Обработка ошибки загрузки favicon (только одна попытка исправления)
 function handleFaviconError(img) {
+  // Если уже была попытка исправления, сразу показываем fallback
+  if (img.dataset.errorHandled === 'true') {
+    img.src = getFallbackIcon();
+    return;
+  }
+  
   const tabItem = img.closest('.tabs-tab-item');
   if (!tabItem) {
     img.src = getFallbackIcon();
@@ -253,19 +258,25 @@ function handleFaviconError(img) {
   const tabUrl = tabItem.dataset.tabUrl;
   const currentSrc = img.src;
   
-  // Если текущий источник - это Google Favicon Service, сразу показываем fallback
+  // Если текущий источник - это Google Favicon Service, пробуем другой размер
   if (currentSrc.includes('google.com/s2/favicons')) {
-    img.src = getFallbackIcon();
+    try {
+      const url = new URL(tabUrl);
+      // Пробуем другой размер
+      img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`;
+      img.dataset.errorHandled = 'true'; // Отмечаем, что была попытка
+    } catch (e) {
+      img.src = getFallbackIcon();
+    }
     return;
   }
   
-  // Если текущий источник - это favIconUrl, пробуем Google Favicon Service один раз
+  // Если это был favIconUrl, пробуем Google Favicon Service
   if (tabUrl) {
     try {
       const url = new URL(tabUrl);
-      // Пробуем загрузить через Google Favicon Service один раз
       img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`;
-      // Если и это не сработает, обработчик ошибки больше не сработает из-за флага errorHandled
+      img.dataset.errorHandled = 'true';
     } catch (e) {
       img.src = getFallbackIcon();
     }
@@ -312,7 +323,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.action === 'refreshTabs') {
     if (tabsPanel && panelVisible) {
-      loadTabs();
+      // Небольшая задержка, чтобы избежать конфликтов при быстром переключении
+      setTimeout(() => {
+        loadTabs();
+      }, 100);
     }
   }
   return true;
