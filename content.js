@@ -193,25 +193,14 @@ async function loadTabFavicon(tabId, imgElement) {
       const faviconUrls = getFaviconUrlsFromTabUrl(tabResult.url);
       console.log('[Tabs Extension] Method 2: Trying URLs from tab URL:', faviconUrls);
       
-      // Пробуем загрузить первый доступный favicon
-      for (const faviconUrl of faviconUrls) {
-        try {
-          // Проверяем доступность через fetch
-          const response = await fetch(faviconUrl, { method: 'HEAD', mode: 'no-cors' });
-          console.log('[Tabs Extension] Trying favicon URL:', faviconUrl);
-          imgElement.src = faviconUrl;
-          return; // Успешно установили URL
-        } catch (e) {
-          // Пробуем следующий URL
-          continue;
-        }
-      }
-      
-      // Если fetch не сработал (CORS), просто пробуем установить первый URL
-      // Браузер сам попробует загрузить
+      // Пробуем установить первый URL (Google Favicon Service обычно самый надежный)
+      // Браузер сам попробует загрузить, обработчик ошибок попробует следующий
       if (faviconUrls.length > 0) {
-        console.log('[Tabs Extension] Setting favicon URL (will try to load):', faviconUrls[0]);
-        imgElement.src = faviconUrls[0];
+        // Используем Google Favicon Service как первый вариант (обычно самый надежный)
+        const preferredUrl = faviconUrls.find(url => url.includes('google.com/s2/favicons')) || faviconUrls[0];
+        console.log('[Tabs Extension] Setting favicon URL (will try to load):', preferredUrl);
+        imgElement.src = preferredUrl;
+        // Если загрузка не удастся, обработчик ошибок попробует другие варианты
         return;
       }
     }
@@ -417,7 +406,7 @@ function filterTabs(searchTerm) {
   renderTabs();
 }
 
-// Обработка ошибки загрузки favicon
+// Обработка ошибки загрузки favicon (пробует альтернативные источники)
 function handleFaviconError(img) {
   const tabItem = img.closest('.tabs-tab-item');
   if (!tabItem) {
@@ -427,29 +416,34 @@ function handleFaviconError(img) {
   
   const tabUrl = tabItem.dataset.tabUrl;
   const currentSrc = img.src;
+  const triedUrls = img.dataset.triedUrls ? JSON.parse(img.dataset.triedUrls) : [];
   
-  // Если уже пробовали favicon.ico, показываем fallback
-  if (currentSrc.includes('/favicon.ico')) {
-    img.src = getFallbackIcon();
-    img.onerror = null; // Отключаем дальнейшие попытки
-    return;
+  console.log('[Tabs Extension] Favicon error, current src:', currentSrc, 'tried:', triedUrls);
+  
+  // Добавляем текущий URL в список попробованных
+  if (currentSrc && !triedUrls.includes(currentSrc)) {
+    triedUrls.push(currentSrc);
+    img.dataset.triedUrls = JSON.stringify(triedUrls);
   }
   
-  // Если это был favIconUrl или другой источник, пробуем favicon.ico
+  // Получаем список альтернативных URL
   if (tabUrl) {
-    try {
-      const url = new URL(tabUrl);
-      if (url.protocol === 'http:' || url.protocol === 'https:') {
-        img.src = `${url.protocol}//${url.hostname}/favicon.ico`;
-        img.dataset.errorHandled = 'true';
-        return;
+    const alternativeUrls = getFaviconUrlsFromTabUrl(tabUrl);
+    
+    // Пробуем следующий URL из списка, который еще не пробовали
+    for (const url of alternativeUrls) {
+      if (!triedUrls.includes(url)) {
+        console.log('[Tabs Extension] Trying alternative favicon URL:', url);
+        img.src = url;
+        triedUrls.push(url);
+        img.dataset.triedUrls = JSON.stringify(triedUrls);
+        return; // Пробуем этот URL
       }
-    } catch (e) {
-      // Если не удалось распарсить URL, показываем fallback
     }
   }
   
-  // В любом другом случае показываем fallback
+  // Если все варианты испробованы, показываем fallback
+  console.log('[Tabs Extension] All favicon URLs failed, using fallback');
   img.src = getFallbackIcon();
   img.onerror = null; // Отключаем дальнейшие попытки
 }
