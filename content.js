@@ -71,6 +71,22 @@ function togglePanel() {
 let allTabs = [];
 let filteredTabs = [];
 
+// Функция для получения URL иконки
+function getFaviconUrl(tab) {
+  // Используем chrome://favicon/ протокол для надежной загрузки иконок
+  // Этот протокол работает для всех типов страниц
+  if (tab.url) {
+    // chrome://favicon/ работает для всех URL, включая chrome:// страницы
+    return `chrome://favicon/${tab.url}`;
+  }
+  // Если есть favIconUrl, используем его
+  if (tab.favIconUrl) {
+    return tab.favIconUrl;
+  }
+  // Fallback иконка
+  return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+}
+
 // Загрузка всех вкладок
 async function loadTabs() {
   try {
@@ -97,20 +113,6 @@ function renderTabs() {
       </div>
     `;
     return;
-  }
-
-  // Функция для получения URL иконки
-  function getFaviconUrl(tab) {
-    // Используем chrome://favicon/ протокол для надежной загрузки иконок
-    if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
-      return `chrome://favicon/${tab.url}`;
-    }
-    // Для chrome:// страниц используем стандартную иконку
-    if (tab.favIconUrl) {
-      return tab.favIconUrl;
-    }
-    // Fallback иконка
-    return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
   }
 
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
