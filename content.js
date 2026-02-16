@@ -169,8 +169,13 @@ function renderTabsList(container, tabs, activeTab) {
     faviconImg.src = faviconUrl;
     faviconImg.alt = '';
     faviconImg.crossOrigin = 'anonymous';
+    // Добавляем флаг, чтобы отслеживать, была ли уже попытка исправления
+    faviconImg.dataset.errorHandled = 'false';
     faviconImg.addEventListener('error', function() {
-      handleFaviconError(this);
+      if (this.dataset.errorHandled === 'false') {
+        this.dataset.errorHandled = 'true';
+        handleFaviconError(this);
+      }
     });
     
     // Создаем контейнер для действий
@@ -204,23 +209,6 @@ function attachTabListeners() {
       
       chrome.runtime.sendMessage({ action: 'switchTab', tabId });
     });
-
-    // Повторная попытка загрузки иконки при ошибке
-    const faviconImg = item.querySelector('.tabs-tab-favicon');
-    if (faviconImg) {
-      faviconImg.addEventListener('error', function() {
-        // Если иконка не загрузилась, пробуем обновить через некоторое время
-        const tab = allTabs.find(t => t.id === tabId);
-        if (tab && tab.url) {
-          setTimeout(() => {
-            // Пробуем загрузить через chrome://favicon/ если еще не пробовали
-            if (!this.src.startsWith('chrome://favicon/')) {
-              this.src = `chrome://favicon/${tab.url}`;
-            }
-          }, 1000);
-        }
-      });
-    }
   });
 
   document.querySelectorAll('.tabs-tab-action-btn').forEach(btn => {
@@ -254,37 +242,35 @@ function filterTabs(searchTerm) {
   renderTabs();
 }
 
-// Обработка ошибки загрузки favicon
+// Обработка ошибки загрузки favicon (только одна попытка исправления)
 function handleFaviconError(img) {
   const tabItem = img.closest('.tabs-tab-item');
   if (!tabItem) {
     img.src = getFallbackIcon();
-    img.onerror = null;
     return;
   }
   
   const tabUrl = tabItem.dataset.tabUrl;
+  const currentSrc = img.src;
+  
+  // Если текущий источник - это Google Favicon Service, сразу показываем fallback
+  if (currentSrc.includes('google.com/s2/favicons')) {
+    img.src = getFallbackIcon();
+    return;
+  }
+  
+  // Если текущий источник - это favIconUrl, пробуем Google Favicon Service один раз
   if (tabUrl) {
     try {
       const url = new URL(tabUrl);
-      // Пробуем загрузить через Google Favicon Service с другим размером
-      img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`;
-      img.onerror = function() {
-        // Если и это не сработало, пробуем еще раз с другим размером
-        this.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=16`;
-        this.onerror = function() {
-          // В крайнем случае показываем fallback
-          this.src = getFallbackIcon();
-          this.onerror = null;
-        };
-      };
+      // Пробуем загрузить через Google Favicon Service один раз
+      img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`;
+      // Если и это не сработает, обработчик ошибки больше не сработает из-за флага errorHandled
     } catch (e) {
       img.src = getFallbackIcon();
-      img.onerror = null;
     }
   } else {
     img.src = getFallbackIcon();
-    img.onerror = null;
   }
 }
 
