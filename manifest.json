@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "My Chrome Extension",
+  "name": "Все вкладки",
   "version": "1.0.0",
-  "description": "A Chrome extension project",
-  "permissions": [],
+  "description": "Расширение для просмотра и управления всеми открытыми вкладками",
+  "permissions": [
+    "tabs"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
