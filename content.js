@@ -2,30 +2,48 @@
 
 let panelVisible = false;
 let tabsPanel = null;
+let shadowRoot = null;
 
-// Создание панели
+// Загрузка CSS в Shadow DOM
+function loadPanelCSS() {
+  return chrome.runtime.getURL('content.css');
+}
+
+// Создание панели с Shadow DOM для изоляции стилей
 function createTabsPanel() {
   if (tabsPanel) return;
 
   // Создаем контейнер панели
   tabsPanel = document.createElement('div');
   tabsPanel.id = 'tabs-extension-panel';
-  tabsPanel.innerHTML = `
-    <div class="tabs-panel-container">
-      <div class="tabs-panel-header">
-        <h2>Все вкладки</h2>
-        <button id="tabs-panel-toggle" class="tabs-panel-toggle">▼</button>
-        <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
-      </div>
-      <div class="tabs-panel-search">
-        <input type="text" id="tabs-panel-search-input" placeholder="Поиск вкладок...">
-      </div>
-      <div id="tabs-panel-content" class="tabs-panel-content">
-        <div class="tabs-loading">Загрузка вкладок...</div>
-      </div>
+  
+  // Создаем Shadow DOM для изоляции стилей
+  shadowRoot = tabsPanel.attachShadow({ mode: 'closed' });
+  
+  // Загружаем CSS
+  const styleLink = document.createElement('link');
+  styleLink.rel = 'stylesheet';
+  styleLink.href = chrome.runtime.getURL('content.css');
+  shadowRoot.appendChild(styleLink);
+  
+  // Создаем контейнер панели
+  const panelContainer = document.createElement('div');
+  panelContainer.className = 'tabs-panel-container';
+  panelContainer.innerHTML = `
+    <div class="tabs-panel-header">
+      <h2>Все вкладки</h2>
+      <button id="tabs-panel-toggle" class="tabs-panel-toggle">▼</button>
+      <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
+    </div>
+    <div class="tabs-panel-search">
+      <input type="text" id="tabs-panel-search-input" placeholder="Поиск вкладок...">
+    </div>
+    <div id="tabs-panel-content" class="tabs-panel-content">
+      <div class="tabs-loading">Загрузка вкладок...</div>
     </div>
   `;
-
+  
+  shadowRoot.appendChild(panelContainer);
   document.body.appendChild(tabsPanel);
 
   // Обработчики событий
@@ -37,9 +55,11 @@ function createTabsPanel() {
 
 // Настройка обработчиков событий
 function setupEventListeners() {
-  const toggleBtn = document.getElementById('tabs-panel-toggle');
-  const refreshBtn = document.getElementById('tabs-panel-refresh');
-  const searchInput = document.getElementById('tabs-panel-search-input');
+  if (!shadowRoot) return;
+  
+  const toggleBtn = shadowRoot.getElementById('tabs-panel-toggle');
+  const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
+  const searchInput = shadowRoot.getElementById('tabs-panel-search-input');
 
   toggleBtn?.addEventListener('click', () => {
     togglePanel();
@@ -58,7 +78,7 @@ function setupEventListeners() {
 function togglePanel() {
   panelVisible = !panelVisible;
   const panel = document.getElementById('tabs-extension-panel');
-  const toggleBtn = document.getElementById('tabs-panel-toggle');
+  const toggleBtn = shadowRoot?.getElementById('tabs-panel-toggle');
   
   if (panel) {
     panel.classList.toggle('collapsed', !panelVisible);
@@ -140,7 +160,7 @@ async function loadTabs() {
 
 // Отображение вкладок
 function renderTabs() {
-  const content = document.getElementById('tabs-panel-content');
+  const content = shadowRoot?.getElementById('tabs-panel-content');
   if (!content) return;
 
   if (filteredTabs.length === 0) {
@@ -321,7 +341,7 @@ function escapeHtml(text) {
 
 // Показать ошибку
 function showError(message) {
-  const content = document.getElementById('tabs-panel-content');
+  const content = shadowRoot?.getElementById('tabs-panel-content');
   if (content) {
     content.innerHTML = `
       <div class="tabs-empty-state">
