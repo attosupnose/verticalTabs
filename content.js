@@ -89,9 +89,9 @@ function getFaviconUrl(tab) {
         return getFallbackIcon();
       }
       
-      // Для обычных страниц пробуем получить favicon через домен
-      // Используем простой способ - через favicon.ico на домене
-      return `${url.protocol}//${url.hostname}/favicon.ico`;
+      // Для обычных страниц используем data URL placeholder
+      // Реальная загрузка произойдет через background script если нужно
+      return getFallbackIcon();
     } catch (e) {
       // Если URL невалидный, используем fallback
       return getFallbackIcon();
@@ -190,7 +190,7 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     faviconImg.className = 'tabs-tab-favicon';
     faviconImg.src = faviconUrl;
     faviconImg.alt = '';
-    faviconImg.crossOrigin = 'anonymous';
+    // Убираем crossOrigin, чтобы избежать проблем с CORS и запросами доступа
     // Добавляем флаг, чтобы отслеживать, была ли уже попытка исправления
     faviconImg.dataset.errorHandled = 'false';
     faviconImg.dataset.tabId = tab.id;
