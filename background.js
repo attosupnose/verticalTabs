@@ -49,6 +49,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'getTabFavicon') {
+    chrome.tabs.get(message.tabId).then(tab => {
+      sendResponse({ favIconUrl: tab.favIconUrl || null });
+    }).catch(() => {
+      sendResponse({ favIconUrl: null });
+    });
+    return true;
+  }
+
   if (message.action === 'switchTab') {
     chrome.tabs.get(message.tabId).then(tab => {
       chrome.tabs.update(message.tabId, { active: true });

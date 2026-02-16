@@ -102,6 +102,18 @@ function getFaviconUrl(tab) {
   return getFallbackIcon();
 }
 
+// Асинхронная загрузка favicon для вкладки (для неактивных вкладок)
+async function loadTabFavicon(tabId, imgElement) {
+  try {
+    const result = await chrome.runtime.sendMessage({ action: 'getTabFavicon', tabId });
+    if (result && result.favIconUrl && imgElement.src !== result.favIconUrl) {
+      imgElement.src = result.favIconUrl;
+    }
+  } catch (e) {
+    // Игнорируем ошибки
+  }
+}
+
 // Получить fallback иконку
 function getFallbackIcon() {
   return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
@@ -181,6 +193,15 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     faviconImg.crossOrigin = 'anonymous';
     // Добавляем флаг, чтобы отслеживать, была ли уже попытка исправления
     faviconImg.dataset.errorHandled = 'false';
+    faviconImg.dataset.tabId = tab.id;
+    
+    // Если favIconUrl нет, пробуем загрузить через background script
+    if (!tab.favIconUrl && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+      setTimeout(() => {
+        loadTabFavicon(tab.id, faviconImg);
+      }, 500);
+    }
+    
     faviconImg.addEventListener('error', function() {
       if (this.dataset.errorHandled === 'false') {
         this.dataset.errorHandled = 'true';
