@@ -42,10 +42,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'getCurrentWindowId') {
+    chrome.windows.getCurrent().then(window => {
+      sendResponse({ windowId: window.id });
+    });
+    return true;
+  }
+
   if (message.action === 'switchTab') {
     chrome.tabs.get(message.tabId).then(tab => {
       chrome.tabs.update(message.tabId, { active: true });
-      chrome.windows.update(tab.windowId, { focused: true });
+      chrome.windows.update(tab.windowId, { focused: true }).then(() => {
+        // Обновляем панели во всех окнах после переключения
+        setTimeout(() => {
+          broadcastToAllTabs({ action: 'refreshTabs' });
+        }, 200);
+      });
       sendResponse({ success: true });
     });
     return true;
@@ -73,6 +85,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.favIconUrl || changeInfo.status === 'complete') {
     broadcastToAllTabs({ action: 'refreshTabs' });
   }
+});
+
+chrome.tabs.onActivated.addListener(() => {
+  // Обновляем панели при переключении активной вкладки
+  broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
 // Отправка сообщения во все вкладки

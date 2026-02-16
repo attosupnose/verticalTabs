@@ -70,6 +70,7 @@ function togglePanel() {
 
 let allTabs = [];
 let filteredTabs = [];
+let currentWindowId = null;
 
 // Функция для получения URL иконки
 function getFaviconUrl(tab) {
@@ -109,6 +110,12 @@ function getFallbackIcon() {
 // Загрузка всех вкладок
 async function loadTabs() {
   try {
+    // Получаем текущий windowId
+    if (!currentWindowId) {
+      const windowInfo = await chrome.runtime.sendMessage({ action: 'getCurrentWindowId' });
+      currentWindowId = windowInfo?.windowId;
+    }
+    
     const tabs = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
     allTabs = tabs || [];
     filteredTabs = allTabs;
@@ -135,15 +142,15 @@ function renderTabs() {
   }
 
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
-    renderTabsList(content, filteredTabs, activeTab);
+    renderTabsList(content, filteredTabs, activeTab, currentWindowId);
   }).catch(() => {
     // Если не удалось получить активную вкладку, просто рендерим без выделения
-    renderTabsList(content, filteredTabs, null);
+    renderTabsList(content, filteredTabs, null, currentWindowId);
   });
 }
 
 // Рендеринг списка вкладок через DOM API для правильного экранирования
-function renderTabsList(container, tabs, activeTab) {
+function renderTabsList(container, tabs, activeTab, currentWindowId) {
   // Очищаем контейнер безопасным способом
   while (container.firstChild) {
     container.removeChild(container.firstChild);
@@ -151,14 +158,19 @@ function renderTabsList(container, tabs, activeTab) {
   
   tabs.forEach(tab => {
     const isActive = activeTab && tab.id === activeTab.id;
+    const isOtherWindow = currentWindowId && tab.windowId !== currentWindowId;
     const faviconUrl = getFaviconUrl(tab);
     const tabTitle = tab.title || 'Без названия';
     
     // Создаем элементы через DOM API
     const tabItem = document.createElement('div');
-    tabItem.className = `tabs-tab-item ${isActive ? 'active' : ''}`;
+    let className = 'tabs-tab-item';
+    if (isActive) className += ' active';
+    if (isOtherWindow) className += ' other-window';
+    tabItem.className = className;
     tabItem.dataset.tabId = tab.id;
     tabItem.dataset.tabUrl = tab.url || '';
+    tabItem.dataset.windowId = tab.windowId || '';
     tabItem.title = tabTitle;
     
     // Создаем изображение
@@ -206,12 +218,7 @@ function attachTabListeners() {
       }
       
       chrome.runtime.sendMessage({ action: 'switchTab', tabId }).then(() => {
-        // Обновляем панель после переключения с небольшой задержкой
-        setTimeout(() => {
-          if (panelVisible) {
-            loadTabs();
-          }
-        }, 300);
+        // Обновление произойдет автоматически через broadcastToAllTabs
       });
     });
   });

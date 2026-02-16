@@ -153,6 +153,23 @@
   border-radius: 50%;
 }
 
+.tabs-tab-item.other-window {
+  border-color: #fbbc04;
+  border-width: 2px;
+  border-style: solid;
+  background-color: #fffbf0;
+}
+
+.tabs-tab-item.other-window.active {
+  background-color: #fff4e6;
+  border-color: #fbbc04;
+  box-shadow: 0 2px 6px rgba(251, 188, 4, 0.3);
+}
+
+.tabs-tab-item.other-window.active::after {
+  background-color: #fbbc04;
+}
+
 .tabs-tab-favicon {
   width: 20px;
   height: 20px;
