@@ -162,6 +162,23 @@ function attachTabListeners() {
       
       chrome.runtime.sendMessage({ action: 'switchTab', tabId });
     });
+
+    // Повторная попытка загрузки иконки при ошибке
+    const faviconImg = item.querySelector('.tabs-tab-favicon');
+    if (faviconImg) {
+      faviconImg.addEventListener('error', function() {
+        // Если иконка не загрузилась, пробуем обновить через некоторое время
+        const tab = allTabs.find(t => t.id === tabId);
+        if (tab && tab.url) {
+          setTimeout(() => {
+            // Пробуем загрузить через chrome://favicon/ если еще не пробовали
+            if (!this.src.startsWith('chrome://favicon/')) {
+              this.src = `chrome://favicon/${tab.url}`;
+            }
+          }, 1000);
+        }
+      });
+    }
   });
 
   document.querySelectorAll('.tabs-tab-action-btn').forEach(btn => {
