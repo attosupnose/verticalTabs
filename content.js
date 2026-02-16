@@ -32,7 +32,7 @@ function createTabsPanel() {
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
       <h2>Все вкладки</h2>
-      <button id="tabs-panel-toggle" class="tabs-panel-toggle">▼</button>
+      <button id="tabs-panel-toggle" class="tabs-panel-toggle">◀</button>
       <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
     </div>
     <div class="tabs-panel-search">
@@ -83,7 +83,7 @@ function togglePanel() {
   if (panel) {
     panel.classList.toggle('collapsed', !panelVisible);
     if (toggleBtn) {
-      toggleBtn.textContent = panelVisible ? '▼' : '▲';
+      toggleBtn.textContent = panelVisible ? '◀' : '▶';
     }
   }
 }
