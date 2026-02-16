@@ -35,14 +35,11 @@ function renderTabs() {
     tabsList.innerHTML = filteredTabs.map(tab => {
       const isActive = tab.id === activeTab?.id;
       const faviconUrl = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999"/></svg>';
+      const tabTitle = tab.title || 'Без названия';
       
       return `
-        <div class="tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}">
+        <div class="tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" title="${escapeHtml(tabTitle)}">
           <img src="${faviconUrl}" alt="" class="tab-favicon" onerror="this.style.display='none'">
-          <div class="tab-content">
-            <div class="tab-title">${escapeHtml(tab.title || 'Без названия')}</div>
-            <div class="tab-url">${escapeHtml(tab.url || 'chrome://newtab/')}</div>
-          </div>
           <div class="tab-actions">
             <button class="tab-action-btn" title="Закрыть" data-action="close">✕</button>
           </div>
