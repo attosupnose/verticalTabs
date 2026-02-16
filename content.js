@@ -96,6 +96,7 @@ let currentWindowId = null;
 function getFaviconUrl(tab) {
   // Сначала пробуем использовать favIconUrl из объекта tab
   if (tab.favIconUrl) {
+    console.log('[Tabs Extension] Using favIconUrl for tab', tab.id, tab.favIconUrl);
     return tab.favIconUrl;
   }
   
@@ -106,31 +107,39 @@ function getFaviconUrl(tab) {
       
       // Для chrome:// и chrome-extension:// страниц используем fallback
       if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
+        console.log('[Tabs Extension] Chrome page, using fallback for tab', tab.id);
         return getFallbackIcon();
       }
       
       // Для обычных страниц используем data URL placeholder
       // Реальная загрузка произойдет через background script если нужно
+      console.log('[Tabs Extension] No favIconUrl for tab', tab.id, 'will try async load');
       return getFallbackIcon();
     } catch (e) {
-      // Если URL невалидный, используем fallback
+      console.warn('[Tabs Extension] Invalid URL for tab', tab.id, tab.url, e);
       return getFallbackIcon();
     }
   }
   
   // Fallback иконка
+  console.log('[Tabs Extension] No URL, using fallback for tab', tab.id);
   return getFallbackIcon();
 }
 
 // Асинхронная загрузка favicon для вкладки (для неактивных вкладок)
 async function loadTabFavicon(tabId, imgElement) {
+  console.log('[Tabs Extension] Attempting to load favicon for tab', tabId);
   try {
     const result = await chrome.runtime.sendMessage({ action: 'getTabFavicon', tabId });
+    console.log('[Tabs Extension] Favicon result for tab', tabId, result);
     if (result && result.favIconUrl && imgElement.src !== result.favIconUrl) {
+      console.log('[Tabs Extension] Setting favicon for tab', tabId, 'to', result.favIconUrl);
       imgElement.src = result.favIconUrl;
+    } else {
+      console.log('[Tabs Extension] No favicon available for tab', tabId);
     }
   } catch (e) {
-    // Игнорируем ошибки
+    console.error('[Tabs Extension] Error loading favicon for tab', tabId, e);
   }
 }
 
@@ -141,19 +150,23 @@ function getFallbackIcon() {
 
 // Загрузка всех вкладок
 async function loadTabs() {
+  console.log('[Tabs Extension] Loading tabs...');
   try {
     // Получаем текущий windowId
     if (!currentWindowId) {
       const windowInfo = await chrome.runtime.sendMessage({ action: 'getCurrentWindowId' });
       currentWindowId = windowInfo?.windowId;
+      console.log('[Tabs Extension] Current window ID:', currentWindowId);
     }
     
     const tabs = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
     allTabs = tabs || [];
     filteredTabs = allTabs;
+    console.log('[Tabs Extension] Loaded', allTabs.length, 'tabs');
+    console.log('[Tabs Extension] Tabs with favIconUrl:', allTabs.filter(t => t.favIconUrl).length);
     renderTabs();
   } catch (error) {
-    console.error('Ошибка загрузки вкладок:', error);
+    console.error('[Tabs Extension] Error loading tabs:', error);
     showError('Не удалось загрузить вкладки');
   }
 }
@@ -225,10 +238,15 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     }
     
     faviconImg.addEventListener('error', function() {
+      console.warn('[Tabs Extension] Favicon load error for tab', tab.id, 'src:', this.src);
       if (this.dataset.errorHandled === 'false') {
         this.dataset.errorHandled = 'true';
         handleFaviconError(this);
       }
+    });
+    
+    faviconImg.addEventListener('load', function() {
+      console.log('[Tabs Extension] Favicon loaded successfully for tab', tab.id, 'src:', this.src);
     });
     
     // Создаем контейнер для действий
@@ -252,30 +270,53 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
 
 // Прикрепление обработчиков для вкладок
 function attachTabListeners() {
-  document.querySelectorAll('.tabs-tab-item').forEach(item => {
+  if (!shadowRoot) {
+    console.error('[Tabs Extension] Shadow root not available');
+    return;
+  }
+  
+  const tabItems = shadowRoot.querySelectorAll('.tabs-tab-item');
+  console.log('[Tabs Extension] Attaching listeners to', tabItems.length, 'tab items');
+  
+  tabItems.forEach(item => {
     const tabId = parseInt(item.dataset.tabId);
     
     item.addEventListener('click', (e) => {
+      console.log('[Tabs Extension] Tab item clicked:', tabId, 'target:', e.target);
       if (e.target.closest('.tabs-tab-actions')) {
+        console.log('[Tabs Extension] Click was on action button, ignoring');
         return;
       }
       
-      chrome.runtime.sendMessage({ action: 'switchTab', tabId }).then(() => {
+      console.log('[Tabs Extension] Switching to tab', tabId);
+      chrome.runtime.sendMessage({ action: 'switchTab', tabId }).then((result) => {
+        console.log('[Tabs Extension] Tab switch result:', result);
         // Обновление произойдет автоматически через broadcastToAllTabs
+      }).catch((error) => {
+        console.error('[Tabs Extension] Error switching tab:', error);
       });
     });
   });
 
-  document.querySelectorAll('.tabs-tab-action-btn').forEach(btn => {
+  const actionButtons = shadowRoot.querySelectorAll('.tabs-tab-action-btn');
+  console.log('[Tabs Extension] Attaching listeners to', actionButtons.length, 'action buttons');
+  
+  actionButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const tabItem = btn.closest('.tabs-tab-item');
       const tabId = parseInt(tabItem.dataset.tabId);
       const action = btn.dataset.action;
 
+      console.log('[Tabs Extension] Action button clicked:', action, 'for tab', tabId);
+
       if (action === 'close') {
+        console.log('[Tabs Extension] Closing tab', tabId);
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
+          console.log('[Tabs Extension] Tab closed, reloading tabs');
           loadTabs();
+        }).catch((error) => {
+          console.error('[Tabs Extension] Error closing tab:', error);
         });
       }
     });
