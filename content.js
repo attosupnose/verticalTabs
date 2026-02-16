@@ -183,6 +183,8 @@ function renderTabs() {
 
 // Рендеринг списка вкладок через DOM API для правильного экранирования
 function renderTabsList(container, tabs, activeTab, currentWindowId) {
+  if (!container) return;
+  
   // Очищаем контейнер безопасным способом
   while (container.firstChild) {
     container.removeChild(container.firstChild);
