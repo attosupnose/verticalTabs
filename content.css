@@ -158,6 +158,20 @@
   height: 20px;
   flex-shrink: 0;
   border-radius: 2px;
+  object-fit: contain;
+  display: block;
+}
+
+/* Fallback для отсутствующих иконок */
+.tabs-tab-item:has(.tabs-tab-favicon[src*="data:image"]) {
+  background-color: #e8eaed;
+}
+
+.tabs-tab-item:has(.tabs-tab-favicon[src*="data:image"])::before {
+  content: '📄';
+  position: absolute;
+  font-size: 16px;
+  opacity: 0.5;
 }
 
 .tabs-tab-actions {

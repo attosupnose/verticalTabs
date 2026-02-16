@@ -99,15 +99,29 @@ function renderTabs() {
     return;
   }
 
+  // Функция для получения URL иконки
+  function getFaviconUrl(tab) {
+    // Используем chrome://favicon/ протокол для надежной загрузки иконок
+    if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+      return `chrome://favicon/${tab.url}`;
+    }
+    // Для chrome:// страниц используем стандартную иконку
+    if (tab.favIconUrl) {
+      return tab.favIconUrl;
+    }
+    // Fallback иконка
+    return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+  }
+
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
     content.innerHTML = filteredTabs.map(tab => {
       const isActive = tab.id === activeTab?.id;
-      const faviconUrl = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999"/></svg>';
+      const faviconUrl = getFaviconUrl(tab);
       const tabTitle = tab.title || 'Без названия';
       
       return `
         <div class="tabs-tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" title="${escapeHtml(tabTitle)}">
-          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.style.display='none'">
+          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 16 16\\'><rect width=\\'16\\' height=\\'16\\' fill=\\'%23999\\' rx=\\'2\\'/></svg>';">
           <div class="tabs-tab-actions">
             <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
           </div>
@@ -119,12 +133,12 @@ function renderTabs() {
   }).catch(() => {
     // Если не удалось получить активную вкладку, просто рендерим без выделения
     content.innerHTML = filteredTabs.map(tab => {
-      const faviconUrl = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999"/></svg>';
+      const faviconUrl = getFaviconUrl(tab);
       const tabTitle = tab.title || 'Без названия';
       
       return `
         <div class="tabs-tab-item" data-tab-id="${tab.id}" title="${escapeHtml(tabTitle)}">
-          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.style.display='none'">
+          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 16 16\\'><rect width=\\'16\\' height=\\'16\\' fill=\\'%23999\\' rx=\\'2\\'/></svg>';">
           <div class="tabs-tab-actions">
             <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
           </div>
