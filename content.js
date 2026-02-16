@@ -1,0 +1,226 @@
+// Content script для отображения панели вкладок внизу страницы
+
+let panelVisible = false;
+let tabsPanel = null;
+
+// Создание панели
+function createTabsPanel() {
+  if (tabsPanel) return;
+
+  // Создаем контейнер панели
+  tabsPanel = document.createElement('div');
+  tabsPanel.id = 'tabs-extension-panel';
+  tabsPanel.innerHTML = `
+    <div class="tabs-panel-container">
+      <div class="tabs-panel-header">
+        <h2>Все вкладки</h2>
+        <button id="tabs-panel-toggle" class="tabs-panel-toggle">▼</button>
+        <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
+      </div>
+      <div class="tabs-panel-search">
+        <input type="text" id="tabs-panel-search-input" placeholder="Поиск вкладок...">
+      </div>
+      <div id="tabs-panel-content" class="tabs-panel-content">
+        <div class="tabs-loading">Загрузка вкладок...</div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(tabsPanel);
+
+  // Обработчики событий
+  setupEventListeners();
+  
+  // Загружаем вкладки
+  loadTabs();
+}
+
+// Настройка обработчиков событий
+function setupEventListeners() {
+  const toggleBtn = document.getElementById('tabs-panel-toggle');
+  const refreshBtn = document.getElementById('tabs-panel-refresh');
+  const searchInput = document.getElementById('tabs-panel-search-input');
+
+  toggleBtn?.addEventListener('click', () => {
+    togglePanel();
+  });
+
+  refreshBtn?.addEventListener('click', () => {
+    loadTabs();
+  });
+
+  searchInput?.addEventListener('input', (e) => {
+    filterTabs(e.target.value);
+  });
+}
+
+// Переключение видимости панели
+function togglePanel() {
+  panelVisible = !panelVisible;
+  const panel = document.getElementById('tabs-extension-panel');
+  const toggleBtn = document.getElementById('tabs-panel-toggle');
+  
+  if (panel) {
+    panel.classList.toggle('collapsed', !panelVisible);
+    if (toggleBtn) {
+      toggleBtn.textContent = panelVisible ? '▼' : '▲';
+    }
+  }
+}
+
+let allTabs = [];
+let filteredTabs = [];
+
+// Загрузка всех вкладок
+async function loadTabs() {
+  try {
+    const tabs = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
+    allTabs = tabs || [];
+    filteredTabs = allTabs;
+    renderTabs();
+  } catch (error) {
+    console.error('Ошибка загрузки вкладок:', error);
+    showError('Не удалось загрузить вкладки');
+  }
+}
+
+// Отображение вкладок
+function renderTabs() {
+  const content = document.getElementById('tabs-panel-content');
+  if (!content) return;
+
+  if (filteredTabs.length === 0) {
+    content.innerHTML = `
+      <div class="tabs-empty-state">
+        <div class="tabs-empty-icon">📑</div>
+        <div class="tabs-empty-text">Вкладки не найдены</div>
+      </div>
+    `;
+    return;
+  }
+
+  chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
+    content.innerHTML = filteredTabs.map(tab => {
+      const isActive = tab.id === activeTab?.id;
+      const faviconUrl = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999"/></svg>';
+      const tabTitle = tab.title || 'Без названия';
+      
+      return `
+        <div class="tabs-tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" title="${escapeHtml(tabTitle)}">
+          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.style.display='none'">
+          <div class="tabs-tab-actions">
+            <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    attachTabListeners();
+  }).catch(() => {
+    // Если не удалось получить активную вкладку, просто рендерим без выделения
+    content.innerHTML = filteredTabs.map(tab => {
+      const faviconUrl = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999"/></svg>';
+      const tabTitle = tab.title || 'Без названия';
+      
+      return `
+        <div class="tabs-tab-item" data-tab-id="${tab.id}" title="${escapeHtml(tabTitle)}">
+          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" onerror="this.style.display='none'">
+          <div class="tabs-tab-actions">
+            <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    attachTabListeners();
+  });
+}
+
+// Прикрепление обработчиков для вкладок
+function attachTabListeners() {
+  document.querySelectorAll('.tabs-tab-item').forEach(item => {
+    const tabId = parseInt(item.dataset.tabId);
+    
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.tabs-tab-actions')) {
+        return;
+      }
+      
+      chrome.runtime.sendMessage({ action: 'switchTab', tabId });
+    });
+  });
+
+  document.querySelectorAll('.tabs-tab-action-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tabItem = btn.closest('.tabs-tab-item');
+      const tabId = parseInt(tabItem.dataset.tabId);
+      const action = btn.dataset.action;
+
+      if (action === 'close') {
+        chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
+          loadTabs();
+        });
+      }
+    });
+  });
+}
+
+// Поиск вкладок
+function filterTabs(searchTerm) {
+  if (!searchTerm.trim()) {
+    filteredTabs = allTabs;
+  } else {
+    const term = searchTerm.toLowerCase();
+    filteredTabs = allTabs.filter(tab => {
+      const title = (tab.title || '').toLowerCase();
+      const url = (tab.url || '').toLowerCase();
+      return title.includes(term) || url.includes(term);
+    });
+  }
+  renderTabs();
+}
+
+// Экранирование HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Показать ошибку
+function showError(message) {
+  const content = document.getElementById('tabs-panel-content');
+  if (content) {
+    content.innerHTML = `
+      <div class="tabs-empty-state">
+        <div class="tabs-empty-icon">⚠️</div>
+        <div class="tabs-empty-text">${escapeHtml(message)}</div>
+      </div>
+    `;
+  }
+}
+
+// Инициализация при загрузке
+if (document.body) {
+  createTabsPanel();
+} else {
+  document.addEventListener('DOMContentLoaded', createTabsPanel);
+}
+
+// Слушаем сообщения от background script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'togglePanel') {
+    if (!tabsPanel) {
+      createTabsPanel();
+    } else {
+      togglePanel();
+    }
+  }
+  if (message.action === 'refreshTabs') {
+    if (tabsPanel && panelVisible) {
+      loadTabs();
+    }
+  }
+  return true;
+});
