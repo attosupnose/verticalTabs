@@ -73,7 +73,12 @@ let filteredTabs = [];
 
 // Функция для получения URL иконки
 function getFaviconUrl(tab) {
-  // Для неактивных вкладок favIconUrl часто пустой, поэтому используем Google Favicon Service
+  // Сначала пробуем использовать favIconUrl из объекта tab (если есть)
+  if (tab.favIconUrl && tab.favIconUrl.startsWith('http')) {
+    return tab.favIconUrl;
+  }
+  
+  // Для неактивных вкладок favIconUrl часто пустой, используем альтернативные методы
   if (tab.url) {
     try {
       const url = new URL(tab.url);
@@ -84,10 +89,10 @@ function getFaviconUrl(tab) {
           return tab.favIconUrl;
         }
         // Иначе используем fallback
-        return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%234285f4" rx="2"/></svg>';
+        return getFallbackIcon();
       }
       // Для обычных страниц используем Google Favicon Service (надежнее для неактивных вкладок)
-      return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+      return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`;
     } catch (e) {
       // Если URL невалидный, пробуем favIconUrl
       if (tab.favIconUrl) {
@@ -96,12 +101,12 @@ function getFaviconUrl(tab) {
     }
   }
   
-  // Если есть favIconUrl, используем его
-  if (tab.favIconUrl) {
-    return tab.favIconUrl;
-  }
-  
   // Fallback иконка
+  return getFallbackIcon();
+}
+
+// Получить fallback иконку
+function getFallbackIcon() {
   return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
 }
 
@@ -134,40 +139,57 @@ function renderTabs() {
   }
 
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
-    content.innerHTML = filteredTabs.map(tab => {
-      const isActive = tab.id === activeTab?.id;
-      const faviconUrl = getFaviconUrl(tab);
-      const tabTitle = tab.title || 'Без названия';
-      
-      return `
-        <div class="tabs-tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" data-tab-url="${escapeHtml(tab.url || '')}" title="${escapeHtml(tabTitle)}">
-          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" crossorigin="anonymous" onerror="handleFaviconError(this)">
-          <div class="tabs-tab-actions">
-            <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    attachTabListeners();
+    renderTabsList(content, filteredTabs, activeTab);
   }).catch(() => {
     // Если не удалось получить активную вкладку, просто рендерим без выделения
-    content.innerHTML = filteredTabs.map(tab => {
-      const faviconUrl = getFaviconUrl(tab);
-      const tabTitle = tab.title || 'Без названия';
-      
-      return `
-        <div class="tabs-tab-item" data-tab-id="${tab.id}" data-tab-url="${escapeHtml(tab.url || '')}" title="${escapeHtml(tabTitle)}">
-          <img src="${faviconUrl}" alt="" class="tabs-tab-favicon" crossorigin="anonymous" onerror="handleFaviconError(this)">
-          <div class="tabs-tab-actions">
-            <button class="tabs-tab-action-btn" title="Закрыть" data-action="close">✕</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    attachTabListeners();
+    renderTabsList(content, filteredTabs, null);
   });
+}
+
+// Рендеринг списка вкладок через DOM API для правильного экранирования
+function renderTabsList(container, tabs, activeTab) {
+  // Очищаем контейнер
+  container.innerHTML = '';
+  
+  tabs.forEach(tab => {
+    const isActive = activeTab && tab.id === activeTab.id;
+    const faviconUrl = getFaviconUrl(tab);
+    const tabTitle = tab.title || 'Без названия';
+    
+    // Создаем элементы через DOM API
+    const tabItem = document.createElement('div');
+    tabItem.className = `tabs-tab-item ${isActive ? 'active' : ''}`;
+    tabItem.dataset.tabId = tab.id;
+    tabItem.dataset.tabUrl = tab.url || '';
+    tabItem.title = tabTitle;
+    
+    // Создаем изображение
+    const faviconImg = document.createElement('img');
+    faviconImg.className = 'tabs-tab-favicon';
+    faviconImg.src = faviconUrl;
+    faviconImg.alt = '';
+    faviconImg.crossOrigin = 'anonymous';
+    faviconImg.addEventListener('error', function() {
+      handleFaviconError(this);
+    });
+    
+    // Создаем контейнер для действий
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'tabs-tab-actions';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'tabs-tab-action-btn';
+    closeBtn.title = 'Закрыть';
+    closeBtn.dataset.action = 'close';
+    closeBtn.textContent = '✕';
+    
+    actionsDiv.appendChild(closeBtn);
+    tabItem.appendChild(faviconImg);
+    tabItem.appendChild(actionsDiv);
+    container.appendChild(tabItem);
+  });
+
+  attachTabListeners();
 }
 
 // Прикрепление обработчиков для вкладок
@@ -235,29 +257,33 @@ function filterTabs(searchTerm) {
 // Обработка ошибки загрузки favicon
 function handleFaviconError(img) {
   const tabItem = img.closest('.tabs-tab-item');
-  if (!tabItem) return;
+  if (!tabItem) {
+    img.src = getFallbackIcon();
+    img.onerror = null;
+    return;
+  }
   
   const tabUrl = tabItem.dataset.tabUrl;
   if (tabUrl) {
     try {
       const url = new URL(tabUrl);
       // Пробуем загрузить через Google Favicon Service с другим размером
-      img.src = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=64`;
+      img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`;
       img.onerror = function() {
         // Если и это не сработало, пробуем еще раз с другим размером
-        this.src = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=16`;
+        this.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=16`;
         this.onerror = function() {
           // В крайнем случае показываем fallback
-          this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+          this.src = getFallbackIcon();
           this.onerror = null;
         };
       };
     } catch (e) {
-      img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+      img.src = getFallbackIcon();
       img.onerror = null;
     }
   } else {
-    img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+    img.src = getFallbackIcon();
     img.onerror = null;
   }
 }
