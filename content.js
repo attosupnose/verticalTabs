@@ -90,6 +90,7 @@ function togglePanel() {
 
 let allTabs = [];
 let filteredTabs = [];
+let allTabGroups = [];
 let currentWindowId = null;
 
 // Функция для получения URL иконки (начальный источник)
@@ -227,10 +228,16 @@ async function loadTabs() {
       console.log('[Tabs Extension] Current window ID:', currentWindowId);
     }
     
-    const tabs = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
+    const [tabs, groups] = await Promise.all([
+      chrome.runtime.sendMessage({ action: 'getAllTabs' }),
+      chrome.runtime.sendMessage({ action: 'getAllTabGroups' }).catch(() => []),
+    ]);
+
     allTabs = tabs || [];
+    allTabGroups = groups || [];
     filteredTabs = allTabs;
     console.log('[Tabs Extension] Loaded', allTabs.length, 'tabs');
+    console.log('[Tabs Extension] Loaded', allTabGroups.length, 'tab groups');
     console.log('[Tabs Extension] Tabs with favIconUrl:', allTabs.filter(t => t.favIconUrl).length);
     renderTabs();
   } catch (error) {
@@ -262,7 +269,7 @@ function renderTabs() {
   });
 }
 
-// Рендеринг списка вкладок через DOM API для правильного экранирования
+// Рендеринг списка вкладок (с маркерами групп) без изменения порядка
 function renderTabsList(container, tabs, activeTab, currentWindowId) {
   if (!container) return;
   
@@ -270,70 +277,152 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
   while (container.firstChild) {
     container.removeChild(container.firstChild);
   }
-  
+
+  const groupById = new Map(allTabGroups.map(g => [g.id, g]));
+  const insertedGroupMarkers = new Set(); // groupId, чтобы вставить маркер один раз
+
   tabs.forEach(tab => {
-    const isActive = activeTab && tab.id === activeTab.id;
-    const isOtherWindow = currentWindowId && tab.windowId !== currentWindowId;
-    const faviconUrl = getFaviconUrl(tab);
-    const tabTitle = tab.title || 'Без названия';
-    
-    // Создаем элементы через DOM API
-    const tabItem = document.createElement('div');
-    let className = 'tabs-tab-item';
-    if (isActive) className += ' active';
-    if (isOtherWindow) className += ' other-window';
-    tabItem.className = className;
-    tabItem.dataset.tabId = tab.id;
-    tabItem.dataset.tabUrl = tab.url || '';
-    tabItem.dataset.windowId = tab.windowId || '';
-    tabItem.title = tabTitle;
-    
-    // Создаем изображение
-    const faviconImg = document.createElement('img');
-    faviconImg.className = 'tabs-tab-favicon';
-    faviconImg.src = faviconUrl;
-    faviconImg.alt = '';
-    // Убираем crossOrigin, чтобы избежать проблем с CORS и запросами доступа
-    // Добавляем флаг, чтобы отслеживать, была ли уже попытка исправления
-    faviconImg.dataset.errorHandled = 'false';
-    faviconImg.dataset.tabId = tab.id;
-    
-    // Если favIconUrl нет, пробуем загрузить через background script
-    if (!tab.favIconUrl && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
-      setTimeout(() => {
-        loadTabFavicon(tab.id, faviconImg);
-      }, 500);
-    }
-    
-    faviconImg.addEventListener('error', function() {
-      console.warn('[Tabs Extension] Favicon load error for tab', tab.id, 'src:', this.src);
-      if (this.dataset.errorHandled === 'false') {
-        this.dataset.errorHandled = 'true';
-        handleFaviconError(this);
+    const groupId = typeof tab.groupId === 'number' ? tab.groupId : -1;
+
+    // Вставляем маркер группы ровно перед первой вкладкой группы (сохраняя порядок)
+    if (groupId !== -1 && !insertedGroupMarkers.has(groupId)) {
+      insertedGroupMarkers.add(groupId);
+      const group = groupById.get(groupId);
+      if (group) {
+        const marker = createGroupMarkerElement(group, tab, activeTab, currentWindowId);
+        container.appendChild(marker);
       }
-    });
-    
-    faviconImg.addEventListener('load', function() {
-      console.log('[Tabs Extension] Favicon loaded successfully for tab', tab.id, 'src:', this.src);
-    });
-    
-    // Создаем контейнер для действий
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'tabs-tab-actions';
-    
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'tabs-tab-action-btn';
-    closeBtn.title = 'Закрыть';
-    closeBtn.dataset.action = 'close';
-    closeBtn.textContent = '✕';
-    
-    actionsDiv.appendChild(closeBtn);
-    tabItem.appendChild(faviconImg);
-    tabItem.appendChild(actionsDiv);
-    container.appendChild(tabItem);
+    }
+
+    const tabElement = createTabElement(tab, activeTab, currentWindowId);
+    container.appendChild(tabElement);
   });
 
   attachTabListeners();
+}
+
+function createGroupMarkerElement(group, representativeTab, activeTab, currentWindowId) {
+  const isGroupActive = activeTab && activeTab.groupId === group.id;
+  const isOtherWindow = currentWindowId && group.windowId && group.windowId !== currentWindowId;
+
+  const el = document.createElement('div');
+  let className = 'tabs-group-marker';
+  if (isGroupActive) className += ' active';
+  if (isOtherWindow) className += ' other-window';
+  el.className = className;
+  el.dataset.groupId = group.id;
+  el.title = group.title || 'Группа вкладок';
+
+  // Цвет группы (Chrome: grey/blue/red/yellow/green/pink/purple/cyan)
+  const borderColor = getGroupColorBorder(group.color);
+  el.style.borderColor = borderColor;
+  el.style.backgroundColor = getGroupColorBackground(group.color);
+
+  // Пытаемся показать favicon первой вкладки группы как “иконку группы”
+  const img = document.createElement('img');
+  img.className = 'tabs-tab-favicon';
+  img.alt = '';
+  img.src = getFaviconUrl(representativeTab);
+  img.dataset.errorHandled = 'false';
+
+  if (!representativeTab.favIconUrl && representativeTab.url && !representativeTab.url.startsWith('chrome://') && !representativeTab.url.startsWith('chrome-extension://')) {
+    setTimeout(() => loadTabFavicon(representativeTab.id, img), 300);
+  }
+
+  img.addEventListener('error', function () {
+    if (this.dataset.errorHandled === 'false') {
+      this.dataset.errorHandled = 'true';
+      handleFaviconError(this);
+    }
+  });
+
+  el.appendChild(img);
+  return el;
+}
+
+function getGroupColorBorder(color) {
+  const colorMap = {
+    grey: '#9aa0a6',
+    blue: '#4285f4',
+    red: '#ea4335',
+    yellow: '#fbbc04',
+    green: '#34a853',
+    pink: '#d01884',
+    purple: '#a142f4',
+    cyan: '#24c1e0',
+  };
+  return colorMap[color] || '#4285f4';
+}
+
+function getGroupColorBackground(color) {
+  const colorMap = {
+    grey: '#f1f3f4',
+    blue: '#e8f0fe',
+    red: '#fce8e6',
+    yellow: '#fef7e0',
+    green: '#e6f4ea',
+    pink: '#fce8f3',
+    purple: '#f3e8fd',
+    cyan: '#e0f7fa',
+  };
+  return colorMap[color] || '#e8f0fe';
+}
+
+function createTabElement(tab, activeTab, currentWindowId) {
+  const isActive = activeTab && tab.id === activeTab.id;
+  const isOtherWindow = currentWindowId && tab.windowId !== currentWindowId;
+  const faviconUrl = getFaviconUrl(tab);
+  const tabTitle = tab.title || 'Без названия';
+
+  // Создаем элементы через DOM API
+  const tabItem = document.createElement('div');
+  let className = 'tabs-tab-item';
+  if (isActive) className += ' active';
+  if (isOtherWindow) className += ' other-window';
+  tabItem.className = className;
+  tabItem.dataset.tabId = tab.id;
+  tabItem.dataset.tabUrl = tab.url || '';
+  tabItem.dataset.windowId = tab.windowId || '';
+  tabItem.title = tabTitle;
+
+  const faviconImg = document.createElement('img');
+  faviconImg.className = 'tabs-tab-favicon';
+  faviconImg.src = faviconUrl;
+  faviconImg.alt = '';
+  faviconImg.dataset.errorHandled = 'false';
+  faviconImg.dataset.tabId = tab.id;
+
+  if (!tab.favIconUrl && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+    setTimeout(() => {
+      loadTabFavicon(tab.id, faviconImg);
+    }, 500);
+  }
+
+  faviconImg.addEventListener('error', function() {
+    console.warn('[Tabs Extension] Favicon load error for tab', tab.id, 'src:', this.src);
+    if (this.dataset.errorHandled === 'false') {
+      this.dataset.errorHandled = 'true';
+      handleFaviconError(this);
+    }
+  });
+
+  faviconImg.addEventListener('load', function() {
+    console.log('[Tabs Extension] Favicon loaded successfully for tab', tab.id, 'src:', this.src);
+  });
+
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'tabs-tab-actions';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'tabs-tab-action-btn';
+  closeBtn.title = 'Закрыть';
+  closeBtn.dataset.action = 'close';
+  closeBtn.textContent = '✕';
+
+  actionsDiv.appendChild(closeBtn);
+  tabItem.appendChild(faviconImg);
+  tabItem.appendChild(actionsDiv);
+  return tabItem;
 }
 
 // Прикрепление обработчиков для вкладок

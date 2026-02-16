@@ -179,6 +179,45 @@
   background-color: #fbbc04;
 }
 
+.tabs-group-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 2px solid #4285f4;
+  background-color: #e8f0fe;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  cursor: default;
+}
+
+.tabs-group-marker.active {
+  box-shadow: 0 2px 6px rgba(66, 133, 244, 0.35);
+}
+
+.tabs-group-marker.other-window {
+  border-style: dashed;
+}
+
+.tabs-group-marker::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+}
+
+.tabs-group-marker.active::after {
+  opacity: 1;
+}
+
 .tabs-tab-favicon {
   width: 20px;
   height: 20px;

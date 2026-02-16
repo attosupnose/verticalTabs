@@ -5,6 +5,7 @@
   "description": "Расширение для просмотра и управления всеми открытыми вкладками",
   "permissions": [
     "tabs",
+    "tabGroups",
     "scripting",
     "activeTab"
   ],

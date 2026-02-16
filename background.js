@@ -35,6 +35,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Асинхронный ответ
   }
 
+  if (message.action === 'getAllTabGroups') {
+    chrome.tabGroups.query({}).then(groups => {
+      sendResponse(groups);
+    }).catch(() => {
+      sendResponse([]);
+    });
+    return true;
+  }
+
   if (message.action === 'getActiveTab') {
     chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => {
       sendResponse(tabs);
@@ -103,6 +112,18 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.favIconUrl || changeInfo.status === 'complete') {
     broadcastToAllTabs({ action: 'refreshTabs' });
   }
+});
+
+chrome.tabGroups.onCreated?.addListener(() => {
+  broadcastToAllTabs({ action: 'refreshTabs' });
+});
+
+chrome.tabGroups.onUpdated?.addListener(() => {
+  broadcastToAllTabs({ action: 'refreshTabs' });
+});
+
+chrome.tabGroups.onRemoved?.addListener(() => {
+  broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
 chrome.tabs.onActivated.addListener(() => {
