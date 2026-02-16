@@ -73,20 +73,32 @@ let filteredTabs = [];
 
 // Функция для получения URL иконки
 function getFaviconUrl(tab) {
-  // Сначала пробуем использовать favIconUrl из объекта tab
-  if (tab.favIconUrl) {
-    return tab.favIconUrl;
-  }
-  
-  // Если favIconUrl нет, пробуем получить иконку через Google Favicon Service
+  // Для неактивных вкладок favIconUrl часто пустой, поэтому используем Google Favicon Service
   if (tab.url) {
     try {
       const url = new URL(tab.url);
-      // Используем Google Favicon Service как fallback
+      // Для chrome:// и chrome-extension:// страниц используем специальную обработку
+      if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
+        // Для системных страниц пробуем использовать favIconUrl, если есть
+        if (tab.favIconUrl) {
+          return tab.favIconUrl;
+        }
+        // Иначе используем fallback
+        return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%234285f4" rx="2"/></svg>';
+      }
+      // Для обычных страниц используем Google Favicon Service (надежнее для неактивных вкладок)
       return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
     } catch (e) {
-      // Если URL невалидный, используем fallback
+      // Если URL невалидный, пробуем favIconUrl
+      if (tab.favIconUrl) {
+        return tab.favIconUrl;
+      }
     }
+  }
+  
+  // Если есть favIconUrl, используем его
+  if (tab.favIconUrl) {
+    return tab.favIconUrl;
   }
   
   // Fallback иконка
@@ -229,12 +241,16 @@ function handleFaviconError(img) {
   if (tabUrl) {
     try {
       const url = new URL(tabUrl);
-      // Пробуем загрузить через Google Favicon Service
-      img.src = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+      // Пробуем загрузить через Google Favicon Service с другим размером
+      img.src = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=64`;
       img.onerror = function() {
-        // Если и это не сработало, показываем fallback
-        this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
-        this.onerror = null;
+        // Если и это не сработало, пробуем еще раз с другим размером
+        this.src = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=16`;
+        this.onerror = function() {
+          // В крайнем случае показываем fallback
+          this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
+          this.onerror = null;
+        };
       };
     } catch (e) {
       img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
