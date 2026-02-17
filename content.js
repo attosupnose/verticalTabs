@@ -138,6 +138,7 @@ let currentWindowId = null;
 
 // Элемент тултипа внутри Shadow DOM
 let tooltipElement = null;
+let tooltipReappearTimeoutId = null;
 
 function ensureTooltipElement() {
   if (!shadowRoot) return null;
@@ -151,6 +152,13 @@ function ensureTooltipElement() {
 
 function showTabTooltip(tabItem) {
   if (!tabItem || !shadowRoot) return;
+
+  // Отменяем отложенное появление, если оно было
+  if (tooltipReappearTimeoutId) {
+    clearTimeout(tooltipReappearTimeoutId);
+    tooltipReappearTimeoutId = null;
+  }
+
   const tooltip = ensureTooltipElement();
   if (!tooltip) return;
 
@@ -178,6 +186,11 @@ function showTabTooltip(tabItem) {
 function hideTabTooltip() {
   if (tooltipElement) {
     tooltipElement.style.opacity = '0';
+  }
+
+  if (tooltipReappearTimeoutId) {
+    clearTimeout(tooltipReappearTimeoutId);
+    tooltipReappearTimeoutId = null;
   }
 }
 
@@ -483,7 +496,7 @@ function createTabElement(tab, activeTab, currentWindowId) {
   if (!tab.favIconUrl && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
     setTimeout(() => {
       loadTabFavicon(tab.id, faviconImg);
-    }, 500);
+    }, 250);
   }
 
   faviconImg.addEventListener('error', function() {
@@ -572,6 +585,29 @@ function attachTabListeners() {
           console.error('[Tabs Extension] Error closing tab:', error);
         });
       }
+    });
+
+    // При наведении на кнопку закрытия скрываем тултип, чтобы кнопка была видна
+    btn.addEventListener('mouseenter', () => {
+      hideTabTooltip();
+    });
+
+    // Когда уводим мышь с кнопки, если курсор снова над плиткой вкладки —
+    // показываем тултип с задержкой 0.5 сек
+    btn.addEventListener('mouseleave', () => {
+      const tabItem = btn.closest('.tabs-tab-item');
+      if (!tabItem) return;
+
+      if (tooltipReappearTimeoutId) {
+        clearTimeout(tooltipReappearTimeoutId);
+      }
+
+      tooltipReappearTimeoutId = setTimeout(() => {
+        tooltipReappearTimeoutId = null;
+        if (tabItem.matches(':hover')) {
+          showTabTooltip(tabItem);
+        }
+      }, 500);
     });
   });
 }
