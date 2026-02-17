@@ -1,10 +1,21 @@
 // Background script для управления вкладками и панелью
+//
+// Состояние видимости панели по окнам (windowId -> boolean)
+const panelVisibilityByWindow = {};
 
 // Переключение панели при клике на иконку
 chrome.action.onClicked.addListener(async (tab) => {
   try {
-    // Отправляем сообщение в content script для переключения панели
-    await chrome.tabs.sendMessage(tab.id, { action: 'togglePanel' });
+    const windowId = tab.windowId;
+    const currentVisible = !!panelVisibilityByWindow[windowId];
+    const newVisible = !currentVisible;
+    panelVisibilityByWindow[windowId] = newVisible;
+
+    // Отправляем сообщение в content script для установки состояния панели
+    await chrome.tabs.sendMessage(tab.id, {
+      action: 'setPanelVisibility',
+      visible: newVisible,
+    });
   } catch (error) {
     // Если content script еще не загружен, инжектируем его
     try {
@@ -18,7 +29,15 @@ chrome.action.onClicked.addListener(async (tab) => {
       });
       // Ждем немного и отправляем сообщение
       setTimeout(async () => {
-        await chrome.tabs.sendMessage(tab.id, { action: 'togglePanel' });
+        const windowId = tab.windowId;
+        const currentVisible = !!panelVisibilityByWindow[windowId];
+        const newVisible = !currentVisible;
+        panelVisibilityByWindow[windowId] = newVisible;
+
+        await chrome.tabs.sendMessage(tab.id, {
+          action: 'setPanelVisibility',
+          visible: newVisible,
+        });
       }, 100);
     } catch (err) {
       console.error('Ошибка инжекции скрипта:', err);
@@ -96,6 +115,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.action === 'panelVisibilityChanged') {
+    if (sender && sender.tab && typeof sender.tab.windowId === 'number') {
+      panelVisibilityByWindow[sender.tab.windowId] = !!message.visible;
+    }
+    return;
+  }
 });
 
 // Обновление панели при изменении вкладок
@@ -126,9 +152,20 @@ chrome.tabGroups.onRemoved?.addListener(() => {
   broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
-chrome.tabs.onActivated.addListener(() => {
+chrome.tabs.onActivated.addListener((activeInfo) => {
   // Обновляем панели при переключении активной вкладки
   broadcastToAllTabs({ action: 'refreshTabs' });
+
+  const windowId = activeInfo.windowId;
+  const tabId = activeInfo.tabId;
+  const visible = !!panelVisibilityByWindow[windowId];
+
+  chrome.tabs.sendMessage(tabId, {
+    action: 'setPanelVisibility',
+    visible,
+  }).catch(() => {
+    // Вкладка может не иметь content script — игнорируем ошибку
+  });
 });
 
 // Отправка сообщения во все вкладки

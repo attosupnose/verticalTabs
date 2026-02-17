@@ -4,6 +4,47 @@ let panelVisible = false;
 let tabsPanel = null;
 let shadowRoot = null;
 
+function updatePanelDomVisibility() {
+  const panel = document.getElementById('tabs-extension-panel');
+  const toggleBtn = shadowRoot?.getElementById('tabs-panel-toggle');
+
+  if (!panel) return;
+
+  panel.classList.toggle('collapsed', !panelVisible);
+
+  if (toggleBtn) {
+    toggleBtn.textContent = panelVisible ? '◀' : '▶';
+  }
+
+  // При открытии панели сдвигаем страницу, при закрытии — возвращаем назад
+  if (panelVisible) {
+    applyPageShift();
+    // Прокручиваем до активной вкладки при открытии панели
+    setTimeout(() => scrollToActiveTab(), 300);
+  } else {
+    removePageShift();
+  }
+}
+
+function setPanelVisibility(visible, { notifyBackground = false } = {}) {
+  panelVisible = !!visible;
+
+  if (!tabsPanel) {
+    createTabsPanel();
+  }
+
+  updatePanelDomVisibility();
+
+  if (notifyBackground) {
+    chrome.runtime.sendMessage({
+      action: 'panelVisibilityChanged',
+      visible: panelVisible,
+    }).catch(() => {
+      // Игнорируем ошибки, если background недоступен
+    });
+  }
+}
+
 // Параметры сдвига страницы при открытии панели
 const PANEL_WIDTH = 350; // должен совпадать с width панели в content.css
 let pageShiftApplied = false;
@@ -87,6 +128,9 @@ function createTabsPanel() {
   
   // Загружаем вкладки
   loadTabs();
+
+   // Применяем текущее состояние видимости (по умолчанию скрыта)
+   updatePanelDomVisibility();
 }
 
 // Настройка обработчиков событий
@@ -110,27 +154,9 @@ function setupEventListeners() {
   });
 }
 
-// Переключение видимости панели
+// Переключение видимости панели (по клику на стрелку в хедере)
 function togglePanel() {
-  panelVisible = !panelVisible;
-  const panel = document.getElementById('tabs-extension-panel');
-  const toggleBtn = shadowRoot?.getElementById('tabs-panel-toggle');
-  
-  if (panel) {
-    panel.classList.toggle('collapsed', !panelVisible);
-    if (toggleBtn) {
-      toggleBtn.textContent = panelVisible ? '◀' : '▶';
-    }
-
-    // При открытии панели сдвигаем страницу, при закрытии — возвращаем назад
-    if (panelVisible) {
-      applyPageShift();
-      // Прокручиваем до активной вкладки при открытии панели
-      setTimeout(() => scrollToActiveTab(), 300);
-    } else {
-      removePageShift();
-    }
-  }
+  setPanelVisibility(!panelVisible, { notifyBackground: true });
 }
 
 let allTabs = [];
@@ -727,11 +753,12 @@ if (document.body) {
 // Слушаем сообщения от background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'togglePanel') {
-    if (!tabsPanel) {
-      createTabsPanel();
-    } else {
-      togglePanel();
-    }
+    // Поддержка старого действия, если где-то еще используется
+    togglePanel();
+  }
+  if (message.action === 'setPanelVisibility') {
+    const visible = !!message.visible;
+    setPanelVisibility(visible, { notifyBackground: false });
   }
   if (message.action === 'refreshTabs') {
     if (tabsPanel && panelVisible) {
