@@ -294,33 +294,20 @@
 }
 
 /* Tooltip для показа названия вкладки */
-.tabs-tab-item[title]:hover::before {
-  content: attr(title);
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+.tabs-tooltip {
+  position: fixed;
+  z-index: 2147483648;
   background-color: #202124;
   color: #fff;
   padding: 6px 10px;
   border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
-  z-index: 2147483648;
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.tabs-tab-item[title]:hover::after {
-  content: '';
-  position: absolute;
-  bottom: calc(100% + 2px);
-  left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent;
-  border-top-color: #202124;
-  z-index: 2147483648;
-  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition: opacity 0.1s ease;
 }
 
 /* Scrollbar styling */

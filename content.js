@@ -136,6 +136,51 @@ let filteredTabs = [];
 let allTabGroups = [];
 let currentWindowId = null;
 
+// Элемент тултипа внутри Shadow DOM
+let tooltipElement = null;
+
+function ensureTooltipElement() {
+  if (!shadowRoot) return null;
+  if (!tooltipElement) {
+    tooltipElement = document.createElement('div');
+    tooltipElement.className = 'tabs-tooltip';
+    shadowRoot.appendChild(tooltipElement);
+  }
+  return tooltipElement;
+}
+
+function showTabTooltip(tabItem) {
+  if (!tabItem || !shadowRoot) return;
+  const tooltip = ensureTooltipElement();
+  if (!tooltip) return;
+
+  const title = tabItem.getAttribute('title');
+  if (!title) return;
+
+  tooltip.textContent = title;
+
+  // Координаты иконки вкладки относительно окна
+  const rect = tabItem.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const topY = rect.top - 8;
+
+  // Немного ограничим по краям окна
+  const padding = 8;
+  const maxLeft = window.innerWidth - padding;
+  const minLeft = padding;
+  const clampedX = Math.min(maxLeft, Math.max(minLeft, centerX));
+
+  tooltip.style.left = `${clampedX}px`;
+  tooltip.style.top = `${topY}px`;
+  tooltip.style.opacity = '1';
+}
+
+function hideTabTooltip() {
+  if (tooltipElement) {
+    tooltipElement.style.opacity = '0';
+  }
+}
+
 // Функция для получения URL иконки (начальный источник)
 function getFaviconUrl(tab) {
   // Сначала пробуем использовать favIconUrl из объекта tab
@@ -495,6 +540,14 @@ function attachTabListeners() {
       }).catch((error) => {
         console.error('[Tabs Extension] Error switching tab:', error);
       });
+    });
+
+    item.addEventListener('mouseenter', () => {
+      showTabTooltip(item);
+    });
+
+    item.addEventListener('mouseleave', () => {
+      hideTabTooltip();
     });
   });
 
