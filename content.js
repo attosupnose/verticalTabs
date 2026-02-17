@@ -51,7 +51,8 @@ let pageShiftApplied = false;
 let originalBodyMarginRight = '';
 let originalBodyTransition = '';
 
-// Количество столбцов с иконками вкладок
+// Настройки количества столбцов с иконками вкладок
+const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
 let columnsCount = 6;
 
 function applyPageShift() {
@@ -87,6 +88,39 @@ function removePageShift() {
 // Загрузка CSS в Shadow DOM
 function loadPanelCSS() {
   return chrome.runtime.getURL('content.css');
+}
+
+// Загрузка сохранённого количества столбцов
+function loadStoredColumnsCount() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) {
+        resolve(null);
+        return;
+      }
+
+      chrome.storage.sync.get([COLUMNS_STORAGE_KEY], (result) => {
+        const value = result?.[COLUMNS_STORAGE_KEY];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          resolve(value);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+// Сохранение количества столбцов
+function storeColumnsCount(value) {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.set({ [COLUMNS_STORAGE_KEY]: value });
+  } catch (e) {
+    // Молча игнорируем ошибки хранения
+  }
 }
 
 // Применение настройки количества столбцов
@@ -147,14 +181,27 @@ function createTabsPanel() {
   shadowRoot.appendChild(panelContainer);
   document.body.appendChild(tabsPanel);
 
-  // Обработчики событий
-  setupEventListeners();
+  // Загружаем сохранённые настройки столбцов, затем инициализируем остальное
+  loadStoredColumnsCount().then((stored) => {
+    if (stored !== null) {
+      columnsCount = Math.max(1, Math.min(12, stored));
+    }
 
-  // Применяем начальную настройку количества столбцов
-  applyColumnsSetting();
-  
-  // Загружаем вкладки
-  loadTabs();
+    // Обработчики событий
+    setupEventListeners();
+
+    // Применяем настройку количества столбцов (уже с учётом сохранённого значения)
+    applyColumnsSetting();
+
+    // Обновляем значение в инпуте, если он уже есть
+    const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
+    if (colsInput) {
+      colsInput.value = String(columnsCount);
+    }
+
+    // Загружаем вкладки
+    loadTabs();
+  });
 
    // Применяем текущее состояние видимости (по умолчанию скрыта)
    updatePanelDomVisibility();
@@ -193,6 +240,7 @@ function setupEventListeners() {
       columnsCount = Math.max(1, Math.min(12, value));
       colsInput.value = String(columnsCount);
       applyColumnsSetting();
+      storeColumnsCount(columnsCount);
     });
   }
 }
