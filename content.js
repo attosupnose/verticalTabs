@@ -255,6 +255,10 @@ let filteredTabs = [];
 let allTabGroups = [];
 let currentWindowId = null;
 
+// Управление автоскроллом к активной вкладке
+let suppressAutoScrollOnce = false;
+let preservedScrollTop = 0;
+
 // Элемент тултипа внутри Shadow DOM
 let tooltipElement = null;
 let tooltipReappearTimeoutId = null;
@@ -510,11 +514,23 @@ function renderTabs() {
 
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
     renderTabsList(content, filteredTabs, activeTab, currentWindowId);
-    // Прокручиваем до активной вкладки после рендеринга
-    setTimeout(() => scrollToActiveTab(), 100);
+
+    if (suppressAutoScrollOnce) {
+      // Восстанавливаем предыдущую позицию скролла (например, после закрытия вкладки)
+      suppressAutoScrollOnce = false;
+      content.scrollTop = preservedScrollTop;
+    } else {
+      // Прокручиваем до активной вкладки после рендеринга
+      setTimeout(() => scrollToActiveTab(), 100);
+    }
   }).catch(() => {
     // Если не удалось получить активную вкладку, просто рендерим без выделения
     renderTabsList(content, filteredTabs, null, currentWindowId);
+
+    if (suppressAutoScrollOnce) {
+      suppressAutoScrollOnce = false;
+      content.scrollTop = preservedScrollTop;
+    }
   });
 }
 
@@ -726,6 +742,14 @@ function attachTabListeners() {
 
       if (action === 'close') {
         console.log('[Tabs Extension] Closing tab', tabId);
+
+        // Запоминаем текущую позицию скролла, чтобы не прыгать после обновления списка
+        const content = shadowRoot?.getElementById('tabs-panel-content');
+        if (content) {
+          preservedScrollTop = content.scrollTop;
+          suppressAutoScrollOnce = true;
+        }
+
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
           console.log('[Tabs Extension] Tab closed, reloading tabs');
           loadTabs();
