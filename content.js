@@ -4,6 +4,42 @@ let panelVisible = false;
 let tabsPanel = null;
 let shadowRoot = null;
 
+// Параметры сдвига страницы при открытии панели
+const PANEL_WIDTH = 350; // должен совпадать с width панели в content.css
+let pageShiftApplied = false;
+let originalBodyMarginRight = '';
+let originalBodyTransition = '';
+
+function applyPageShift() {
+  const body = document.body;
+  if (!body) return;
+
+  if (!pageShiftApplied) {
+    originalBodyMarginRight = body.style.marginRight;
+    originalBodyTransition = body.style.transition;
+  }
+
+  // Добавляем/расширяем transition так, чтобы margin-right анимировался
+  const currentTransition = body.style.transition || '';
+  if (!currentTransition.includes('margin-right')) {
+    body.style.transition = currentTransition
+      ? `${currentTransition}, margin-right 0.3s ease`
+      : 'margin-right 0.3s ease';
+  }
+
+  body.style.marginRight = `${PANEL_WIDTH}px`;
+  pageShiftApplied = true;
+}
+
+function removePageShift() {
+  const body = document.body;
+  if (!body || !pageShiftApplied) return;
+
+  body.style.marginRight = originalBodyMarginRight;
+  body.style.transition = originalBodyTransition;
+  pageShiftApplied = false;
+}
+
 // Загрузка CSS в Shadow DOM
 function loadPanelCSS() {
   return chrome.runtime.getURL('content.css');
@@ -84,6 +120,13 @@ function togglePanel() {
     panel.classList.toggle('collapsed', !panelVisible);
     if (toggleBtn) {
       toggleBtn.textContent = panelVisible ? '◀' : '▶';
+    }
+
+    // При открытии панели сдвигаем страницу, при закрытии — возвращаем назад
+    if (panelVisible) {
+      applyPageShift();
+    } else {
+      removePageShift();
     }
   }
 }
