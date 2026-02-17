@@ -1,14 +1,14 @@
 /* Content script стили для панели вкладок внизу страницы */
 /* Изолированы через Shadow DOM */
 
-/* CSS Reset для изоляции от стилей сайта */
+/* CSS Reset для изоляции от стилей сайта (только внутри панели) */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-#tabs-extension-panel {
+:host {
   position: fixed !important;
   top: 0 !important;
   right: 0 !important;
@@ -26,7 +26,7 @@
   flex-direction: column !important;
 }
 
-#tabs-extension-panel.collapsed {
+:host(.collapsed) {
   transform: translateX(calc(100% - 1px));
 }
 
