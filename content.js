@@ -125,6 +125,8 @@ function togglePanel() {
     // При открытии панели сдвигаем страницу, при закрытии — возвращаем назад
     if (panelVisible) {
       applyPageShift();
+      // Прокручиваем до активной вкладки при открытии панели
+      setTimeout(() => scrollToActiveTab(), 300);
     } else {
       removePageShift();
     }
@@ -347,6 +349,30 @@ async function loadTabs() {
   }
 }
 
+// Прокрутка до активной вкладки
+function scrollToActiveTab() {
+  // Прокручиваем только если панель видима
+  if (!panelVisible || !shadowRoot) return;
+  
+  const content = shadowRoot.getElementById('tabs-panel-content');
+  if (!content) return;
+  
+  const activeTabItem = shadowRoot.querySelector('.tabs-tab-item.active');
+  if (!activeTabItem) return;
+  
+  // Прокручиваем до активной вкладки с небольшим отступом сверху
+  const contentRect = content.getBoundingClientRect();
+  const itemRect = activeTabItem.getBoundingClientRect();
+  const scrollTop = content.scrollTop;
+  const itemTop = itemRect.top - contentRect.top + scrollTop;
+  
+  // Прокручиваем так, чтобы элемент был виден с небольшим отступом
+  content.scrollTo({
+    top: itemTop - 12,
+    behavior: 'smooth'
+  });
+}
+
 // Отображение вкладок
 function renderTabs() {
   const content = shadowRoot?.getElementById('tabs-panel-content');
@@ -364,6 +390,8 @@ function renderTabs() {
 
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
     renderTabsList(content, filteredTabs, activeTab, currentWindowId);
+    // Прокручиваем до активной вкладки после рендеринга
+    setTimeout(() => scrollToActiveTab(), 100);
   }).catch(() => {
     // Если не удалось получить активную вкладку, просто рендерим без выделения
     renderTabsList(content, filteredTabs, null, currentWindowId);
@@ -712,6 +740,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!window.lastTabRefresh || now - window.lastTabRefresh > 500) {
         window.lastTabRefresh = now;
         loadTabs();
+        // Прокручиваем до активной вкладки после обновления
+        setTimeout(() => scrollToActiveTab(), 200);
       }
     }
   }
