@@ -331,7 +331,7 @@ function getFaviconUrl(tab) {
   // 0. Если для вкладки уже есть закэшированный URL — используем его
   if (tabId !== null && faviconCache.has(tabId)) {
     const cached = faviconCache.get(tabId);
-    // console.log('[Tabs Extension] Using cached favicon for tab', tabId, cached);
+    console.log('[Tabs Extension] getFaviconUrl: using cached favicon for tab', tabId, cached);
     return cached;
   }
 
@@ -340,6 +340,7 @@ function getFaviconUrl(tab) {
   // 1. Сначала пробуем использовать favIconUrl из объекта tab
   if (tab.favIconUrl) {
     resultUrl = tab.favIconUrl;
+    console.log('[Tabs Extension] getFaviconUrl: using tab.favIconUrl for tab', tabId, resultUrl);
   } else if (tab.url) {
     // 2. Если favIconUrl нет, пробуем получить через URL
     try {
@@ -348,28 +349,34 @@ function getFaviconUrl(tab) {
       // Для chrome:// и chrome-extension:// страниц используем fallback
       if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
         resultUrl = getFallbackIcon();
+        console.log('[Tabs Extension] getFaviconUrl: chrome*/extension page, using fallback for tab', tabId);
       } else {
         // Для обычных страниц пробуем получить favicon напрямую по URL
         const faviconUrls = getFaviconUrlsFromTabUrl(tab.url);
         if (faviconUrls.length > 0) {
           // Используем Google Favicon Service как первый вариант
           resultUrl = faviconUrls[1] || faviconUrls[0]; // faviconUrls[1] это Google Favicon Service
+          console.log('[Tabs Extension] getFaviconUrl: using URL-derived favicon for tab', tabId, resultUrl);
         } else {
           resultUrl = getFallbackIcon();
+          console.log('[Tabs Extension] getFaviconUrl: no favicon URLs, using fallback for tab', tabId);
         }
       }
     } catch (e) {
       console.warn('[Tabs Extension] Invalid URL for tab', tab.id, tab.url, e);
       resultUrl = getFallbackIcon();
+      console.log('[Tabs Extension] getFaviconUrl: invalid URL, using fallback for tab', tabId);
     }
   } else {
     // 3. Нет ни favIconUrl, ни URL — fallback
     resultUrl = getFallbackIcon();
+    console.log('[Tabs Extension] getFaviconUrl: no favIconUrl and no URL, using fallback for tab', tabId);
   }
 
   // Записываем в кэш, чтобы в следующий раз не пересчитывать
   if (tabId !== null && resultUrl) {
     faviconCache.set(tabId, resultUrl);
+    console.log('[Tabs Extension] getFaviconUrl: caching favicon for tab', tabId, resultUrl);
   }
 
   return resultUrl || getFallbackIcon();
@@ -417,7 +424,7 @@ async function loadTabFavicon(tabId, imgElement) {
   if (typeof tabId === 'number' && faviconCache.has(tabId)) {
     const cachedUrl = faviconCache.get(tabId);
     if (cachedUrl && imgElement.src !== cachedUrl) {
-      // console.log('[Tabs Extension] Using cached favicon for tab', tabId, cachedUrl);
+      console.log('[Tabs Extension] loadTabFavicon: using cached favicon for tab', tabId, cachedUrl);
       imgElement.src = cachedUrl;
     }
     return;
@@ -429,7 +436,7 @@ async function loadTabFavicon(tabId, imgElement) {
     const result = await chrome.runtime.sendMessage({ action: 'getTabFavicon', tabId });
     console.log('[Tabs Extension] Method 1 (background script) result for tab', tabId, result);
     if (result && result.favIconUrl && imgElement.src !== result.favIconUrl) {
-      console.log('[Tabs Extension] Setting favicon from background script:', result.favIconUrl);
+      console.log('[Tabs Extension] loadTabFavicon: no cache, will use background script favicon for tab', tabId, result.favIconUrl);
       imgElement.src = result.favIconUrl;
       faviconCache.set(tabId, result.favIconUrl);
       return; // Успешно загрузили через background script
@@ -450,7 +457,7 @@ async function loadTabFavicon(tabId, imgElement) {
       if (faviconUrls.length > 0) {
         // Используем Google Favicon Service как первый вариант (обычно самый надежный)
         const preferredUrl = faviconUrls.find(url => url.includes('google.com/s2/favicons')) || faviconUrls[0];
-        console.log('[Tabs Extension] Setting favicon URL (will try to load):', preferredUrl);
+        console.log('[Tabs Extension] loadTabFavicon: no cache, will use URL-derived favicon for tab', tabId, preferredUrl);
         imgElement.src = preferredUrl;
         faviconCache.set(tabId, preferredUrl);
         // Если загрузка не удастся, обработчик ошибок попробует другие варианты
@@ -472,6 +479,7 @@ function getFallbackIcon() {
 // Загрузка всех вкладок
 async function loadTabs() {
   console.log('[Tabs Extension] Loading tabs...');
+  console.log('[Tabs Extension] Favicon cache size before loading tabs:', faviconCache.size);
   try {
     // Получаем текущий windowId
     if (!currentWindowId) {
@@ -712,15 +720,25 @@ function createTabElement(tab, activeTab, currentWindowId) {
   });
 
   faviconImg.addEventListener('load', function() {
+    const tabId = typeof tab.id === 'number' ? tab.id : null;
+    const wasInCacheBefore = tabId !== null ? faviconCache.has(tabId) : false;
+
     // Сохраняем успешно загруженный URL в кэш, чтобы не пересчитывать / не дёргать background лишний раз
-    if (typeof tab.id === 'number') {
-      faviconCache.set(tab.id, this.src);
+    if (tabId !== null) {
+      faviconCache.set(tabId, this.src);
     }
 
     // Логируем только при первом успешном получении иконки для вкладки
     if (!this.dataset.loadedLogged) {
       this.dataset.loadedLogged = 'true';
-      console.log('[Tabs Extension] Favicon loaded successfully for tab', tab.id, 'src:', this.src);
+      console.log(
+        '[Tabs Extension] Favicon loaded successfully for tab',
+        tabId,
+        'src:',
+        this.src,
+        '| wasInCacheBefore =',
+        wasInCacheBefore
+      );
     }
   });
 
