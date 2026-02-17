@@ -51,6 +51,9 @@ let pageShiftApplied = false;
 let originalBodyMarginRight = '';
 let originalBodyTransition = '';
 
+// Количество столбцов с иконками вкладок
+let columnsCount = 6;
+
 function applyPageShift() {
   const body = document.body;
   if (!body) return;
@@ -86,6 +89,17 @@ function loadPanelCSS() {
   return chrome.runtime.getURL('content.css');
 }
 
+// Применение настройки количества столбцов
+function applyColumnsSetting() {
+  if (!shadowRoot) return;
+  const content = shadowRoot.getElementById('tabs-panel-content');
+  if (!content) return;
+
+  const safeColumns = Math.max(1, Math.min(12, Number(columnsCount) || 1));
+  columnsCount = safeColumns;
+  content.style.gridTemplateColumns = `repeat(${safeColumns}, 40px)`;
+}
+
 // Создание панели с Shadow DOM для изоляции стилей
 function createTabsPanel() {
   if (tabsPanel) return;
@@ -109,6 +123,16 @@ function createTabsPanel() {
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
       <h2>Все вкладки</h2>
+      <input
+        type="number"
+        id="tabs-panel-cols-input"
+        class="tabs-panel-cols-input"
+        min="1"
+        max="12"
+        value="6"
+        title="Количество столбцов с иконками"
+        aria-label="Количество столбцов с иконками"
+      >
       <button id="tabs-panel-toggle" class="tabs-panel-toggle">◀</button>
       <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
     </div>
@@ -125,6 +149,9 @@ function createTabsPanel() {
 
   // Обработчики событий
   setupEventListeners();
+
+  // Применяем начальную настройку количества столбцов
+  applyColumnsSetting();
   
   // Загружаем вкладки
   loadTabs();
@@ -140,6 +167,7 @@ function setupEventListeners() {
   const toggleBtn = shadowRoot.getElementById('tabs-panel-toggle');
   const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
   const searchInput = shadowRoot.getElementById('tabs-panel-search-input');
+   const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
 
   toggleBtn?.addEventListener('click', () => {
     togglePanel();
@@ -152,6 +180,21 @@ function setupEventListeners() {
   searchInput?.addEventListener('input', (e) => {
     filterTabs(e.target.value);
   });
+
+  if (colsInput) {
+    colsInput.value = String(columnsCount);
+    colsInput.addEventListener('change', () => {
+      const value = parseInt(colsInput.value, 10);
+      if (Number.isNaN(value)) {
+        colsInput.value = String(columnsCount);
+        return;
+      }
+
+      columnsCount = Math.max(1, Math.min(12, value));
+      colsInput.value = String(columnsCount);
+      applyColumnsSetting();
+    });
+  }
 }
 
 // Переключение видимости панели (по клику на стрелку в хедере)
@@ -403,6 +446,9 @@ function scrollToActiveTab() {
 function renderTabs() {
   const content = shadowRoot?.getElementById('tabs-panel-content');
   if (!content) return;
+
+  // Применяем текущую настройку количества столбцов
+  applyColumnsSetting();
 
   if (filteredTabs.length === 0) {
     content.innerHTML = `
