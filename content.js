@@ -837,6 +837,31 @@ function showError(message) {
   }
 }
 
+// Синхронизация количества столбцов между вкладками
+if (chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync') return;
+    const change = changes[COLUMNS_STORAGE_KEY];
+    if (!change) return;
+
+    const newValue = change.newValue;
+    if (typeof newValue !== 'number' || !Number.isFinite(newValue)) return;
+
+    columnsCount = Math.max(1, Math.min(12, newValue));
+
+    // Обновляем значение в инпуте, если он уже есть
+    if (shadowRoot) {
+      const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
+      if (colsInput) {
+        colsInput.value = String(columnsCount);
+      }
+    }
+
+    // Применяем новую настройку к сетке
+    applyColumnsSetting();
+  });
+}
+
 // Инициализация при загрузке
 if (document.body) {
   createTabsPanel();
