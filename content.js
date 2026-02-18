@@ -159,7 +159,7 @@ function storePanelWidth(value) {
 
 function applyPanelWidth() {
   if (tabsPanel) {
-    tabsPanel.style.setProperty('width', `${panelWidth}px`, 'important');
+    tabsPanel.style.setProperty('--panel-width', `${panelWidth}px`);
   }
   if (pageShiftApplied && document.body) {
     document.body.style.marginRight = `${panelWidth}px`;
@@ -386,31 +386,39 @@ function setupResizeHandle() {
 
   handle.addEventListener('mousedown', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     isResizing = true;
     startX = e.clientX;
     startWidth = panelWidth;
     handle.classList.add('active');
-    if (document.body) {
-      document.body.style.transition = 'none';
-    }
+    document.body.style.transition = 'none';
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
   });
 
-  document.addEventListener('mousemove', (e) => {
+  window.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
+    e.preventDefault();
+    e.stopPropagation();
     const delta = startX - e.clientX;
     panelWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, startWidth + delta));
     applyPanelWidth();
-  });
+  }, true);
 
-  document.addEventListener('mouseup', () => {
+  window.addEventListener('mouseup', (e) => {
     if (!isResizing) return;
+    e.stopPropagation();
     isResizing = false;
     handle.classList.remove('active');
-    if (document.body && pageShiftApplied) {
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
+    if (pageShiftApplied) {
       document.body.style.transition = 'margin-right 0.3s ease';
+    } else {
+      document.body.style.transition = '';
     }
     storePanelWidth(panelWidth);
-  });
+  }, true);
 }
 
 // Переключение видимости панели (по клику на стрелку в хедере)
