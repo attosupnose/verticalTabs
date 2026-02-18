@@ -995,6 +995,21 @@ function attachTabListeners() {
       });
     });
 
+    item.addEventListener('mousedown', (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      const content = shadowRoot?.getElementById('tabs-panel-content');
+      if (content) {
+        preservedScrollTop = content.scrollTop;
+        suppressAutoScrollOnce = true;
+      }
+      chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
+        loadTabs();
+      }).catch((error) => {
+        console.error('[Tabs Extension] Error closing tab:', error);
+      });
+    });
+
     item.addEventListener('mouseenter', () => {
       showTabTooltip(item);
     });
