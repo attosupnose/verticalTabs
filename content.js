@@ -46,7 +46,10 @@ function setPanelVisibility(visible, { notifyBackground = false } = {}) {
 }
 
 // Параметры сдвига страницы при открытии панели
-const PANEL_WIDTH = 350; // должен совпадать с width панели в content.css
+const PANEL_WIDTH_STORAGE_KEY = 'tabsExtensionPanelWidth';
+const MIN_PANEL_WIDTH = 150;
+const MAX_PANEL_WIDTH = 800;
+let panelWidth = 350;
 let pageShiftApplied = false;
 let originalBodyMarginRight = '';
 let originalBodyTransition = '';
@@ -79,7 +82,7 @@ function applyPageShift() {
       : 'margin-right 0.3s ease';
   }
 
-  body.style.marginRight = `${PANEL_WIDTH}px`;
+  body.style.marginRight = `${panelWidth}px`;
   pageShiftApplied = true;
 }
 
@@ -127,6 +130,39 @@ function storeColumnsCount(value) {
     chrome.storage.sync.set({ [COLUMNS_STORAGE_KEY]: value });
   } catch (e) {
     // Молча игнорируем ошибки хранения
+  }
+}
+
+// Ширина панели — storage + применение
+function loadStoredPanelWidth() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
+      chrome.storage.sync.get([PANEL_WIDTH_STORAGE_KEY], (result) => {
+        const value = result?.[PANEL_WIDTH_STORAGE_KEY];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          resolve(value);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+function storePanelWidth(value) {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.set({ [PANEL_WIDTH_STORAGE_KEY]: value });
+  } catch (e) { /* ignore */ }
+}
+
+function applyPanelWidth() {
+  if (tabsPanel) {
+    tabsPanel.style.setProperty('width', `${panelWidth}px`, 'important');
+  }
+  if (pageShiftApplied && document.body) {
+    document.body.style.marginRight = `${panelWidth}px`;
   }
 }
 
@@ -255,20 +291,29 @@ function createTabsPanel() {
     </div>
   `;
   
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'tabs-resize-handle';
+  panelContainer.appendChild(resizeHandle);
+
   shadowRoot.appendChild(panelContainer);
   document.body.appendChild(tabsPanel);
 
   // Загружаем сохранённые настройки, затем инициализируем остальное
-  Promise.all([loadStoredColumnsCount(), loadCollapsedGroups()]).then(([storedCols, storedCollapsed]) => {
+  Promise.all([loadStoredColumnsCount(), loadCollapsedGroups(), loadStoredPanelWidth()]).then(([storedCols, storedCollapsed, storedWidth]) => {
     if (storedCols !== null) {
       columnsCount = Math.max(1, Math.min(12, storedCols));
     }
     if (storedCollapsed !== null) {
       collapsedGroups = storedCollapsed;
     }
+    if (storedWidth !== null) {
+      panelWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, storedWidth));
+    }
+    applyPanelWidth();
 
     // Обработчики событий
     setupEventListeners();
+    setupResizeHandle();
 
     // Применяем настройку количества столбцов (уже с учётом сохранённого значения)
     applyColumnsSetting();
@@ -328,6 +373,44 @@ function setupEventListeners() {
       storeColumnsCount(columnsCount);
     });
   }
+}
+
+function setupResizeHandle() {
+  if (!shadowRoot) return;
+  const handle = shadowRoot.querySelector('.tabs-resize-handle');
+  if (!handle) return;
+
+  let isResizing = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = panelWidth;
+    handle.classList.add('active');
+    if (document.body) {
+      document.body.style.transition = 'none';
+    }
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const delta = startX - e.clientX;
+    panelWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, startWidth + delta));
+    applyPanelWidth();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isResizing) return;
+    isResizing = false;
+    handle.classList.remove('active');
+    if (document.body && pageShiftApplied) {
+      document.body.style.transition = 'margin-right 0.3s ease';
+    }
+    storePanelWidth(panelWidth);
+  });
 }
 
 // Переключение видимости панели (по клику на стрелку в хедере)
@@ -1167,6 +1250,16 @@ if (chrome.storage && chrome.storage.onChanged) {
           if (colsInput) colsInput.value = String(columnsCount);
         }
         applyColumnsSetting();
+      }
+    }
+
+    // Синхронизация ширины панели
+    const widthChange = changes[PANEL_WIDTH_STORAGE_KEY];
+    if (widthChange) {
+      const newValue = widthChange.newValue;
+      if (typeof newValue === 'number' && Number.isFinite(newValue)) {
+        panelWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, newValue));
+        applyPanelWidth();
       }
     }
 
