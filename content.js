@@ -461,7 +461,7 @@ function showTabTooltip(tabItem) {
   // Координаты иконки вкладки относительно окна
   const rect = tabItem.getBoundingClientRect();
   const centerX = rect.left + rect.width / 2;
-  const topY = rect.top - 8;
+  const topY = rect.top - 28;
 
   // Немного ограничим по краям окна
   const padding = 8;
