@@ -570,36 +570,109 @@ function renderTabs() {
   });
 }
 
-// Рендеринг списка вкладок (с маркерами групп) без изменения порядка
+// Рендеринг списка вкладок — diff-подход: переиспользуем существующие DOM-элементы,
+// создаём только новые, удаляем лишние, обновляем классы.
 function renderTabsList(container, tabs, activeTab, currentWindowId) {
   if (!container) return;
-  
-  // Очищаем контейнер безопасным способом
-  while (container.firstChild) {
-    container.removeChild(container.firstChild);
-  }
 
   const groupById = new Map(allTabGroups.map(g => [g.id, g]));
-  const insertedGroupMarkers = new Set(); // groupId, чтобы вставить маркер один раз
+  const insertedGroupMarkers = new Set();
 
+  // 1. Собираем желаемый порядок элементов (ключ = "tab-<id>" или "group-<id>")
+  const desiredOrder = [];
   tabs.forEach(tab => {
     const groupId = typeof tab.groupId === 'number' ? tab.groupId : -1;
-
-    // Вставляем маркер группы ровно перед первой вкладкой группы (сохраняя порядок)
     if (groupId !== -1 && !insertedGroupMarkers.has(groupId)) {
       insertedGroupMarkers.add(groupId);
       const group = groupById.get(groupId);
       if (group) {
-        const marker = createGroupMarkerElement(group, tab, activeTab, currentWindowId);
-        container.appendChild(marker);
+        desiredOrder.push({ key: `group-${groupId}`, type: 'group', group, representativeTab: tab });
       }
     }
-
-    const tabElement = createTabElement(tab, activeTab, currentWindowId);
-    container.appendChild(tabElement);
+    desiredOrder.push({ key: `tab-${tab.id}`, type: 'tab', tab });
   });
 
+  // 2. Индексируем существующие DOM-элементы по ключу
+  const existingByKey = new Map();
+  for (const child of Array.from(container.children)) {
+    if (child.classList.contains('tabs-tab-item') && child.dataset.tabId) {
+      existingByKey.set(`tab-${child.dataset.tabId}`, child);
+    } else if (child.classList.contains('tabs-group-marker') && child.dataset.groupId) {
+      existingByKey.set(`group-${child.dataset.groupId}`, child);
+    }
+  }
+
+  // 3. Удаляем элементы, которых больше нет в желаемом списке
+  const desiredKeySet = new Set(desiredOrder.map(d => d.key));
+  for (const [key, el] of existingByKey) {
+    if (!desiredKeySet.has(key)) {
+      el.remove();
+      existingByKey.delete(key);
+    }
+  }
+
+  // 4. Проходим по желаемому порядку: переиспользуем или создаём
+  let cursor = container.firstChild; // текущий «следующий ожидаемый» DOM-ребёнок
+  for (const entry of desiredOrder) {
+    let el = existingByKey.get(entry.key);
+
+    if (el) {
+      // Элемент уже существует — обновляем только классы / data-атрибуты
+      if (entry.type === 'tab') {
+        updateTabElementInPlace(el, entry.tab, activeTab, currentWindowId);
+      } else {
+        updateGroupMarkerInPlace(el, entry.group, activeTab, currentWindowId);
+      }
+
+      // Если элемент не на своём месте в порядке — переставляем
+      if (el !== cursor) {
+        container.insertBefore(el, cursor);
+      } else {
+        cursor = el.nextSibling;
+      }
+    } else {
+      // Элемента нет — создаём новый
+      if (entry.type === 'tab') {
+        el = createTabElement(entry.tab, activeTab, currentWindowId);
+      } else {
+        el = createGroupMarkerElement(entry.group, entry.representativeTab, activeTab, currentWindowId);
+      }
+      container.insertBefore(el, cursor);
+    }
+  }
+
+  // 5. Навешиваем обработчики только на новые элементы (без data-listeners)
   attachTabListeners();
+}
+
+// Обновление существующего tab-элемента на месте (без пересоздания <img>)
+function updateTabElementInPlace(el, tab, activeTab, currentWindowId) {
+  const isActive = activeTab && tab.id === activeTab.id;
+  const isOtherWindow = currentWindowId && tab.windowId !== currentWindowId;
+
+  let className = 'tabs-tab-item';
+  if (isActive) className += ' active';
+  if (isOtherWindow) className += ' other-window';
+  if (el.className !== className) el.className = className;
+
+  const tabTitle = tab.title || 'Без названия';
+  if (el.title !== tabTitle) el.title = tabTitle;
+  if (el.dataset.tabUrl !== (tab.url || '')) el.dataset.tabUrl = tab.url || '';
+  if (el.dataset.windowId !== String(tab.windowId || '')) el.dataset.windowId = tab.windowId || '';
+}
+
+// Обновление существующего group-marker на месте
+function updateGroupMarkerInPlace(el, group, activeTab, currentWindowId) {
+  const isGroupActive = activeTab && activeTab.groupId === group.id;
+  const isOtherWindow = currentWindowId && group.windowId && group.windowId !== currentWindowId;
+
+  let className = 'tabs-group-marker';
+  if (isGroupActive) className += ' active';
+  if (isOtherWindow) className += ' other-window';
+  if (el.className !== className) el.className = className;
+
+  el.style.borderColor = getGroupColorBorder(group.color);
+  el.style.backgroundColor = getGroupColorBackground(group.color);
 }
 
 function createGroupMarkerElement(group, representativeTab, activeTab, currentWindowId) {
@@ -757,30 +830,24 @@ function createTabElement(tab, activeTab, currentWindowId) {
   return tabItem;
 }
 
-// Прикрепление обработчиков для вкладок
+// Прикрепление обработчиков для вкладок (только к новым элементам без data-listeners)
 function attachTabListeners() {
   if (!shadowRoot) {
     console.error('[Tabs Extension] Shadow root not available');
     return;
   }
   
-  const tabItems = shadowRoot.querySelectorAll('.tabs-tab-item');
-  console.log('[Tabs Extension] Attaching listeners to', tabItems.length, 'tab items');
+  const tabItems = shadowRoot.querySelectorAll('.tabs-tab-item:not([data-listeners])');
   
   tabItems.forEach(item => {
+    item.dataset.listeners = 'true';
     const tabId = parseInt(item.dataset.tabId);
     
     item.addEventListener('click', (e) => {
-      console.log('[Tabs Extension] Tab item clicked:', tabId, 'target:', e.target);
-      if (e.target.closest('.tabs-tab-actions')) {
-        console.log('[Tabs Extension] Click was on action button, ignoring');
-        return;
-      }
+      if (e.target.closest('.tabs-tab-actions')) return;
       
-      console.log('[Tabs Extension] Switching to tab', tabId);
       chrome.runtime.sendMessage({ action: 'switchTab', tabId }).then((result) => {
         console.log('[Tabs Extension] Tab switch result:', result);
-        // Обновление произойдет автоматически через broadcastToAllTabs
       }).catch((error) => {
         console.error('[Tabs Extension] Error switching tab:', error);
       });
@@ -795,22 +862,19 @@ function attachTabListeners() {
     });
   });
 
-  const actionButtons = shadowRoot.querySelectorAll('.tabs-tab-action-btn');
-  console.log('[Tabs Extension] Attaching listeners to', actionButtons.length, 'action buttons');
+  const actionButtons = shadowRoot.querySelectorAll('.tabs-tab-item:not([data-listeners-btn]) .tabs-tab-action-btn');
   
   actionButtons.forEach(btn => {
+    const tabItem = btn.closest('.tabs-tab-item');
+    if (tabItem) tabItem.dataset.listenersBtn = 'true';
+
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const tabItem = btn.closest('.tabs-tab-item');
       const tabId = parseInt(tabItem.dataset.tabId);
       const action = btn.dataset.action;
 
-      console.log('[Tabs Extension] Action button clicked:', action, 'for tab', tabId);
-
       if (action === 'close') {
-        console.log('[Tabs Extension] Closing tab', tabId);
-
-        // Запоминаем текущую позицию скролла, чтобы не прыгать после обновления списка
         const content = shadowRoot?.getElementById('tabs-panel-content');
         if (content) {
           preservedScrollTop = content.scrollTop;
@@ -818,7 +882,6 @@ function attachTabListeners() {
         }
 
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
-          console.log('[Tabs Extension] Tab closed, reloading tabs');
           loadTabs();
         }).catch((error) => {
           console.error('[Tabs Extension] Error closing tab:', error);
@@ -826,13 +889,10 @@ function attachTabListeners() {
       }
     });
 
-    // При наведении на кнопку закрытия скрываем тултип, чтобы кнопка была видна
     btn.addEventListener('mouseenter', () => {
       hideTabTooltip();
     });
 
-    // Когда уводим мышь с кнопки, если курсор снова над плиткой вкладки —
-    // показываем тултип с задержкой 0.5 сек
     btn.addEventListener('mouseleave', () => {
       const tabItem = btn.closest('.tabs-tab-item');
       if (!tabItem) return;
