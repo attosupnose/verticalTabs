@@ -208,10 +208,16 @@
   width: 40px;
   height: 40px;
   border-radius: 6px;
-  border: 2px solid #4285f4;
+  border: 3px solid #4285f4;
   background-color: #e8f0fe;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  cursor: default;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabs-group-marker:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
 }
 
 .tabs-group-marker.active {
@@ -220,6 +226,25 @@
 
 .tabs-group-marker.other-window {
   border-style: dashed;
+}
+
+.tabs-group-marker.collapsed {
+  opacity: 0.75;
+}
+
+.tabs-group-marker.collapsed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 0, 0, 0.06) 3px,
+    rgba(0, 0, 0, 0.06) 6px
+  );
+  pointer-events: none;
 }
 
 .tabs-group-marker::after {
@@ -237,6 +262,21 @@
 
 .tabs-group-marker.active::after {
   opacity: 1;
+}
+
+/* Счётчик вкладок внутри маркера группы */
+.tabs-group-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 0 4px;
 }
 
 .tabs-tab-favicon {

@@ -55,6 +55,10 @@ let originalBodyTransition = '';
 const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
 let columnsCount = 6;
 
+// Свёрнутые группы (Set<number> — groupId)
+const COLLAPSED_GROUPS_STORAGE_KEY = 'tabsExtensionCollapsedGroups';
+let collapsedGroups = new Set();
+
 // Кэш favicon по id вкладки (в рамках одной страницы)
 const faviconCache = new Map();
 
@@ -126,6 +130,42 @@ function storeColumnsCount(value) {
   }
 }
 
+// Загрузка свёрнутых групп из storage
+function loadCollapsedGroups() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
+      chrome.storage.sync.get([COLLAPSED_GROUPS_STORAGE_KEY], (result) => {
+        const arr = result?.[COLLAPSED_GROUPS_STORAGE_KEY];
+        if (Array.isArray(arr)) {
+          resolve(new Set(arr.filter(id => typeof id === 'number')));
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+// Сохранение свёрнутых групп в storage
+function storeCollapsedGroups() {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.set({ [COLLAPSED_GROUPS_STORAGE_KEY]: [...collapsedGroups] });
+  } catch (e) { /* ignore */ }
+}
+
+// Переключение свёрнутости группы
+function toggleGroupCollapsed(groupId) {
+  if (collapsedGroups.has(groupId)) {
+    collapsedGroups.delete(groupId);
+  } else {
+    collapsedGroups.add(groupId);
+  }
+  storeCollapsedGroups();
+  renderTabs();
+}
+
 // Применение настройки количества столбцов
 function applyColumnsSetting() {
   if (!shadowRoot) return;
@@ -184,10 +224,13 @@ function createTabsPanel() {
   shadowRoot.appendChild(panelContainer);
   document.body.appendChild(tabsPanel);
 
-  // Загружаем сохранённые настройки столбцов, затем инициализируем остальное
-  loadStoredColumnsCount().then((stored) => {
-    if (stored !== null) {
-      columnsCount = Math.max(1, Math.min(12, stored));
+  // Загружаем сохранённые настройки, затем инициализируем остальное
+  Promise.all([loadStoredColumnsCount(), loadCollapsedGroups()]).then(([storedCols, storedCollapsed]) => {
+    if (storedCols !== null) {
+      columnsCount = Math.max(1, Math.min(12, storedCols));
+    }
+    if (storedCollapsed !== null) {
+      collapsedGroups = storedCollapsed;
     }
 
     // Обработчики событий
@@ -579,6 +622,7 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
   const insertedGroupMarkers = new Set();
 
   // 1. Собираем желаемый порядок элементов (ключ = "tab-<id>" или "group-<id>")
+  //    Если группа свёрнута — её вкладки не включаются
   const desiredOrder = [];
   tabs.forEach(tab => {
     const groupId = typeof tab.groupId === 'number' ? tab.groupId : -1;
@@ -589,6 +633,8 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
         desiredOrder.push({ key: `group-${groupId}`, type: 'group', group, representativeTab: tab });
       }
     }
+    // Скрываем вкладки свёрнутых групп
+    if (groupId !== -1 && collapsedGroups.has(groupId)) return;
     desiredOrder.push({ key: `tab-${tab.id}`, type: 'tab', tab });
   });
 
@@ -665,14 +711,25 @@ function updateTabElementInPlace(el, tab, activeTab, currentWindowId) {
 function updateGroupMarkerInPlace(el, group, activeTab, currentWindowId) {
   const isGroupActive = activeTab && activeTab.groupId === group.id;
   const isOtherWindow = currentWindowId && group.windowId && group.windowId !== currentWindowId;
+  const isCollapsed = collapsedGroups.has(group.id);
 
   let className = 'tabs-group-marker';
   if (isGroupActive) className += ' active';
   if (isOtherWindow) className += ' other-window';
+  if (isCollapsed) className += ' collapsed';
   if (el.className !== className) el.className = className;
 
   el.style.borderColor = getGroupColorBorder(group.color);
   el.style.backgroundColor = getGroupColorBackground(group.color);
+
+  // Обновляем счётчик вкладок
+  const countBadge = el.querySelector('.tabs-group-count');
+  if (countBadge) {
+    const groupTabCount = allTabs.filter(t => t.groupId === group.id).length;
+    const countStr = String(groupTabCount);
+    if (countBadge.textContent !== countStr) countBadge.textContent = countStr;
+    countBadge.style.backgroundColor = getGroupColorBorder(group.color);
+  }
 }
 
 function createGroupMarkerElement(group, representativeTab, activeTab, currentWindowId) {
@@ -683,40 +740,22 @@ function createGroupMarkerElement(group, representativeTab, activeTab, currentWi
   let className = 'tabs-group-marker';
   if (isGroupActive) className += ' active';
   if (isOtherWindow) className += ' other-window';
+  if (collapsedGroups.has(group.id)) className += ' collapsed';
   el.className = className;
   el.dataset.groupId = group.id;
   el.title = group.title || 'Группа вкладок';
 
-  // Цвет группы (Chrome: grey/blue/red/yellow/green/pink/purple/cyan)
-  const borderColor = getGroupColorBorder(group.color);
-  el.style.borderColor = borderColor;
+  el.style.borderColor = getGroupColorBorder(group.color);
   el.style.backgroundColor = getGroupColorBackground(group.color);
 
-  // Пытаемся показать favicon первой вкладки группы как “иконку группы”
-  const img = document.createElement('img');
-  img.className = 'tabs-tab-favicon';
-  img.alt = '';
-  img.src = getFaviconUrl(representativeTab);
-  img.dataset.errorHandled = 'false';
+  // Счётчик вкладок в группе
+  const countBadge = document.createElement('span');
+  countBadge.className = 'tabs-group-count';
+  const groupTabCount = allTabs.filter(t => t.groupId === group.id).length;
+  countBadge.textContent = String(groupTabCount);
+  countBadge.style.backgroundColor = getGroupColorBorder(group.color);
 
-  if (
-    !representativeTab.favIconUrl &&
-    representativeTab.url &&
-    !representativeTab.url.startsWith('chrome://') &&
-    !representativeTab.url.startsWith('chrome-extension://') &&
-    !faviconCache.has(representativeTab.id)
-  ) {
-    setTimeout(() => loadTabFavicon(representativeTab.id, img), 300);
-  }
-
-  img.addEventListener('error', function () {
-    if (this.dataset.errorHandled === 'false') {
-      this.dataset.errorHandled = 'true';
-      handleFaviconError(this);
-    }
-  });
-
-  el.appendChild(img);
+  el.appendChild(countBadge);
   return el;
 }
 
@@ -830,13 +869,23 @@ function createTabElement(tab, activeTab, currentWindowId) {
   return tabItem;
 }
 
-// Прикрепление обработчиков для вкладок (только к новым элементам без data-listeners)
+// Прикрепление обработчиков для вкладок и групп (только к новым элементам без data-listeners)
 function attachTabListeners() {
   if (!shadowRoot) {
     console.error('[Tabs Extension] Shadow root not available');
     return;
   }
-  
+
+  // Обработчики для маркеров групп
+  const groupMarkers = shadowRoot.querySelectorAll('.tabs-group-marker:not([data-listeners])');
+  groupMarkers.forEach(marker => {
+    marker.dataset.listeners = 'true';
+    const groupId = parseInt(marker.dataset.groupId);
+    marker.addEventListener('click', () => {
+      toggleGroupCollapsed(groupId);
+    });
+  });
+
   const tabItems = shadowRoot.querySelectorAll('.tabs-tab-item:not([data-listeners])');
   
   tabItems.forEach(item => {
@@ -994,28 +1043,36 @@ function showError(message) {
   }
 }
 
-// Синхронизация количества столбцов между вкладками
+// Синхронизация настроек между вкладками
 if (chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync') return;
-    const change = changes[COLUMNS_STORAGE_KEY];
-    if (!change) return;
 
-    const newValue = change.newValue;
-    if (typeof newValue !== 'number' || !Number.isFinite(newValue)) return;
-
-    columnsCount = Math.max(1, Math.min(12, newValue));
-
-    // Обновляем значение в инпуте, если он уже есть
-    if (shadowRoot) {
-      const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
-      if (colsInput) {
-        colsInput.value = String(columnsCount);
+    // Синхронизация количества столбцов
+    const colsChange = changes[COLUMNS_STORAGE_KEY];
+    if (colsChange) {
+      const newValue = colsChange.newValue;
+      if (typeof newValue === 'number' && Number.isFinite(newValue)) {
+        columnsCount = Math.max(1, Math.min(12, newValue));
+        if (shadowRoot) {
+          const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
+          if (colsInput) colsInput.value = String(columnsCount);
+        }
+        applyColumnsSetting();
       }
     }
 
-    // Применяем новую настройку к сетке
-    applyColumnsSetting();
+    // Синхронизация свёрнутых групп
+    const groupsChange = changes[COLLAPSED_GROUPS_STORAGE_KEY];
+    if (groupsChange) {
+      const arr = groupsChange.newValue;
+      if (Array.isArray(arr)) {
+        collapsedGroups = new Set(arr.filter(id => typeof id === 'number'));
+      } else {
+        collapsedGroups = new Set();
+      }
+      renderTabs();
+    }
   });
 }
 
