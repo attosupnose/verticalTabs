@@ -69,6 +69,24 @@
   color: #202124;
 }
 
+.tabs-panel-toggle-all {
+  background: none;
+  border: 1px solid #dadce0;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: #5f6368;
+  border-radius: 4px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.tabs-panel-toggle-all:hover {
+  background-color: #e8eaed;
+  color: #202124;
+  border-color: #c0c0c0;
+}
+
 .tabs-panel-refresh {
   background: none;
   border: none;
@@ -201,72 +219,64 @@
 }
 
 .tabs-group-marker {
-  position: relative;
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
   border-radius: 6px;
-  border: 3px solid #4285f4;
+  border: none;
+  border-left: 3px solid #4285f4;
   background-color: #e8f0fe;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  padding: 4px 8px;
   cursor: pointer;
   transition: all 0.2s;
+  margin: 2px 0;
 }
 
 .tabs-group-marker:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  transform: translateY(-1px);
+  filter: brightness(0.95);
 }
 
 .tabs-group-marker.active {
-  box-shadow: 0 2px 6px rgba(66, 133, 244, 0.35);
+  box-shadow: 0 1px 4px rgba(66, 133, 244, 0.3);
 }
 
 .tabs-group-marker.other-window {
-  border-style: dashed;
+  border-left-style: dashed;
 }
 
 .tabs-group-marker.collapsed {
-  opacity: 0.75;
+  background-color: transparent;
+  opacity: 0.7;
 }
 
-.tabs-group-marker.collapsed::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 4px;
-  background: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 3px,
-    rgba(0, 0, 0, 0.06) 3px,
-    rgba(0, 0, 0, 0.06) 6px
-  );
-  pointer-events: none;
-}
-
-.tabs-group-marker::after {
-  content: '';
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0;
-}
-
-.tabs-group-marker.active::after {
+.tabs-group-marker.collapsed:hover {
   opacity: 1;
+  background-color: #f8f9fa;
+}
+
+.tabs-group-indicator {
+  font-size: 8px;
+  color: #5f6368;
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+}
+
+.tabs-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
 
 /* Счётчик вкладок внутри маркера группы */
 .tabs-group-count {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #fff;
   line-height: 1;
@@ -277,6 +287,7 @@
   justify-content: center;
   border-radius: 8px;
   padding: 0 4px;
+  flex-shrink: 0;
 }
 
 .tabs-tab-favicon {
@@ -286,6 +297,52 @@
   border-radius: 2px;
   object-fit: contain;
   display: block;
+}
+
+.tabs-tab-title {
+  display: none;
+  font-size: 12px;
+  color: #3c4043;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+/* Single-column mode: icon + title row */
+.tabs-panel-content.single-column {
+  justify-items: stretch;
+}
+
+.tabs-panel-content.single-column .tabs-tab-item {
+  width: auto;
+  height: 32px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.tabs-panel-content.single-column .tabs-tab-title {
+  display: block;
+}
+
+.tabs-panel-content.single-column .tabs-tab-item.active::after {
+  display: none;
+}
+
+.tabs-panel-content.single-column .tabs-tab-actions {
+  position: static;
+  top: auto;
+  right: auto;
+  flex-shrink: 0;
+}
+
+.tabs-panel-content.single-column .tabs-tab-action-btn {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
 }
 
 /* Fallback для отсутствующих иконок */

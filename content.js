@@ -166,6 +166,32 @@ function toggleGroupCollapsed(groupId) {
   renderTabs();
 }
 
+function toggleAllGroups() {
+  const allGroupIds = allTabGroups.map(g => g.id);
+  if (allGroupIds.length === 0) return;
+
+  const allCollapsed = allGroupIds.every(id => collapsedGroups.has(id));
+  if (allCollapsed) {
+    collapsedGroups.clear();
+  } else {
+    allGroupIds.forEach(id => collapsedGroups.add(id));
+  }
+  storeCollapsedGroups();
+  renderTabs();
+}
+
+function updateToggleAllButton() {
+  if (!shadowRoot) return;
+  const btn = shadowRoot.getElementById('tabs-panel-toggle-all');
+  if (!btn) return;
+
+  const allGroupIds = allTabGroups.map(g => g.id);
+  const hasGroups = allGroupIds.length > 0;
+  const allCollapsed = hasGroups && allGroupIds.every(id => collapsedGroups.has(id));
+  btn.textContent = allCollapsed ? '▶' : '▼';
+  btn.style.display = hasGroups ? '' : 'none';
+}
+
 // Применение настройки количества столбцов
 function applyColumnsSetting() {
   if (!shadowRoot) return;
@@ -174,7 +200,14 @@ function applyColumnsSetting() {
 
   const safeColumns = Math.max(1, Math.min(12, Number(columnsCount) || 1));
   columnsCount = safeColumns;
-  content.style.gridTemplateColumns = `repeat(${safeColumns}, 40px)`;
+
+  if (safeColumns === 1) {
+    content.style.gridTemplateColumns = '1fr';
+    content.classList.add('single-column');
+  } else {
+    content.style.gridTemplateColumns = `repeat(${safeColumns}, 40px)`;
+    content.classList.remove('single-column');
+  }
 }
 
 // Создание панели с Shadow DOM для изоляции стилей
@@ -200,6 +233,7 @@ function createTabsPanel() {
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
       <h2>Все вкладки</h2>
+      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▼</button>
       <input
         type="number"
         id="tabs-panel-cols-input"
@@ -268,6 +302,11 @@ function setupEventListeners() {
 
   refreshBtn?.addEventListener('click', () => {
     loadTabs();
+  });
+
+  const toggleAllBtn = shadowRoot.getElementById('tabs-panel-toggle-all');
+  toggleAllBtn?.addEventListener('click', () => {
+    toggleAllGroups();
   });
 
   searchInput?.addEventListener('input', (e) => {
@@ -687,8 +726,16 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     }
   }
 
-  // 5. Навешиваем обработчики только на новые элементы (без data-listeners)
+  // 5. Удаляем оставшиеся «осиротевшие» узлы (например, placeholder загрузки)
+  while (cursor) {
+    const next = cursor.nextSibling;
+    cursor.remove();
+    cursor = next;
+  }
+
+  // 6. Навешиваем обработчики только на новые элементы (без data-listeners)
   attachTabListeners();
+  updateToggleAllButton();
 }
 
 // Обновление существующего tab-элемента на месте (без пересоздания <img>)
@@ -703,6 +750,10 @@ function updateTabElementInPlace(el, tab, activeTab, currentWindowId) {
 
   const tabTitle = tab.title || 'Без названия';
   if (el.title !== tabTitle) el.title = tabTitle;
+
+  const titleSpan = el.querySelector('.tabs-tab-title');
+  if (titleSpan && titleSpan.textContent !== tabTitle) titleSpan.textContent = tabTitle;
+
   if (el.dataset.tabUrl !== (tab.url || '')) el.dataset.tabUrl = tab.url || '';
   if (el.dataset.windowId !== String(tab.windowId || '')) el.dataset.windowId = tab.windowId || '';
 }
@@ -719,10 +770,21 @@ function updateGroupMarkerInPlace(el, group, activeTab, currentWindowId) {
   if (isCollapsed) className += ' collapsed';
   if (el.className !== className) el.className = className;
 
-  el.style.borderColor = getGroupColorBorder(group.color);
-  el.style.backgroundColor = getGroupColorBackground(group.color);
+  el.style.borderLeftColor = getGroupColorBorder(group.color);
+  el.style.backgroundColor = isCollapsed ? '' : getGroupColorBackground(group.color);
 
-  // Обновляем счётчик вкладок
+  const indicator = el.querySelector('.tabs-group-indicator');
+  if (indicator) {
+    indicator.textContent = isCollapsed ? '▶' : '▼';
+  }
+
+  const titleSpan = el.querySelector('.tabs-group-title');
+  if (titleSpan) {
+    const titleText = group.title || 'Группа';
+    if (titleSpan.textContent !== titleText) titleSpan.textContent = titleText;
+    titleSpan.style.color = getGroupColorBorder(group.color);
+  }
+
   const countBadge = el.querySelector('.tabs-group-count');
   if (countBadge) {
     const groupTabCount = allTabs.filter(t => t.groupId === group.id).length;
@@ -735,26 +797,37 @@ function updateGroupMarkerInPlace(el, group, activeTab, currentWindowId) {
 function createGroupMarkerElement(group, representativeTab, activeTab, currentWindowId) {
   const isGroupActive = activeTab && activeTab.groupId === group.id;
   const isOtherWindow = currentWindowId && group.windowId && group.windowId !== currentWindowId;
+  const isCollapsed = collapsedGroups.has(group.id);
 
   const el = document.createElement('div');
   let className = 'tabs-group-marker';
   if (isGroupActive) className += ' active';
   if (isOtherWindow) className += ' other-window';
-  if (collapsedGroups.has(group.id)) className += ' collapsed';
+  if (isCollapsed) className += ' collapsed';
   el.className = className;
   el.dataset.groupId = group.id;
   el.title = group.title || 'Группа вкладок';
 
-  el.style.borderColor = getGroupColorBorder(group.color);
-  el.style.backgroundColor = getGroupColorBackground(group.color);
+  el.style.borderLeftColor = getGroupColorBorder(group.color);
+  el.style.backgroundColor = isCollapsed ? '' : getGroupColorBackground(group.color);
 
-  // Счётчик вкладок в группе
+  const indicator = document.createElement('span');
+  indicator.className = 'tabs-group-indicator';
+  indicator.textContent = isCollapsed ? '▶' : '▼';
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'tabs-group-title';
+  titleSpan.textContent = group.title || 'Группа';
+  titleSpan.style.color = getGroupColorBorder(group.color);
+
   const countBadge = document.createElement('span');
   countBadge.className = 'tabs-group-count';
   const groupTabCount = allTabs.filter(t => t.groupId === group.id).length;
   countBadge.textContent = String(groupTabCount);
   countBadge.style.backgroundColor = getGroupColorBorder(group.color);
 
+  el.appendChild(indicator);
+  el.appendChild(titleSpan);
   el.appendChild(countBadge);
   return el;
 }
@@ -865,6 +938,12 @@ function createTabElement(tab, activeTab, currentWindowId) {
 
   actionsDiv.appendChild(closeBtn);
   tabItem.appendChild(faviconImg);
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'tabs-tab-title';
+  titleSpan.textContent = tabTitle;
+  tabItem.appendChild(titleSpan);
+
   tabItem.appendChild(actionsDiv);
   return tabItem;
 }
@@ -894,7 +973,21 @@ function attachTabListeners() {
     
     item.addEventListener('click', (e) => {
       if (e.target.closest('.tabs-tab-actions')) return;
-      
+
+      if (e.ctrlKey && e.shiftKey) {
+        const content = shadowRoot?.getElementById('tabs-panel-content');
+        if (content) {
+          preservedScrollTop = content.scrollTop;
+          suppressAutoScrollOnce = true;
+        }
+        chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
+          loadTabs();
+        }).catch((error) => {
+          console.error('[Tabs Extension] Error closing tab:', error);
+        });
+        return;
+      }
+
       chrome.runtime.sendMessage({ action: 'switchTab', tabId }).then((result) => {
         console.log('[Tabs Extension] Tab switch result:', result);
       }).catch((error) => {
