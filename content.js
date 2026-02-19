@@ -41,6 +41,11 @@ function updatePanelDomVisibility({ skipAnimation = false } = {}) {
   // При открытии панели сдвигаем страницу, при закрытии — возвращаем назад
   if (panelVisible) {
     applyPageShift();
+    // После раскрытия панели пересчитываем адаптивную раскладку по фактической ширине.
+    requestAnimationFrame(() => {
+      applyColumnsSetting();
+      requestAnimationFrame(() => applyColumnsSetting());
+    });
     // Прокручиваем до активной вкладки при открытии панели
     setTimeout(() => scrollToActiveTab(), 300);
   } else {
@@ -395,7 +400,7 @@ function updateLayoutToggleButton() {
   const btn = shadowRoot.getElementById('tabs-panel-layout-toggle');
   if (!btn) return;
   btn.classList.toggle('active', spreadLayoutEnabled);
-  btn.textContent = spreadLayoutEnabled ? '↔' : '↤';
+  btn.textContent = spreadLayoutEnabled ? '↤' : '↔';
   btn.title = spreadLayoutEnabled
     ? 'Выключить равномерную раскладку'
     : 'Включить равномерную раскладку';
@@ -465,7 +470,7 @@ function createTabsPanel() {
   panelContainer.className = 'tabs-panel-container';
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
-      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="Включить равномерную раскладку">↤</button>
+      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="Включить равномерную раскладку">↔</button>
       <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="Включить мини-кнопку в свернутом режиме">📌</button>
       <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="Показать/скрыть поиск">🔍</button>
       <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▾▾</button>
