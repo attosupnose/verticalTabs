@@ -22,7 +22,7 @@ function updatePanelDomVisibility({ skipAnimation = false } = {}) {
   panel.classList.toggle('launcher-hidden', !panelVisible && !collapsedLauncherEnabled);
 
   if (toggleBtn) {
-    toggleBtn.textContent = panelVisible ? '❮' : '❯';
+    toggleBtn.textContent = panelVisible ? '❯' : '❮';
     toggleBtn.title = panelVisible ? 'Свернуть панель' : 'Развернуть панель';
   }
   if (launcherToggleBtn) {
@@ -93,6 +93,8 @@ const COLLAPSED_LAUNCHER_STORAGE_KEY = 'tabsExtensionCollapsedLauncherEnabled';
 let collapsedLauncherEnabled = true;
 const SEARCH_VISIBLE_STORAGE_KEY = 'tabsExtensionSearchVisible';
 let searchVisible = false;
+const COLLAPSED_PEEK_TOP_STORAGE_KEY = 'tabsExtensionCollapsedPeekTop';
+let collapsedPeekTop = 8;
 
 // Кэш favicon по id вкладки (в рамках одной страницы)
 const faviconCache = new Map();
@@ -208,6 +210,29 @@ function storeSearchVisible(value) {
   try {
     if (!chrome.storage || !chrome.storage.sync) return;
     chrome.storage.sync.set({ [SEARCH_VISIBLE_STORAGE_KEY]: !!value });
+  } catch (e) { /* ignore */ }
+}
+
+function loadStoredCollapsedPeekTop() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
+      chrome.storage.sync.get([COLLAPSED_PEEK_TOP_STORAGE_KEY], (result) => {
+        const value = result?.[COLLAPSED_PEEK_TOP_STORAGE_KEY];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          resolve(value);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+function storeCollapsedPeekTop(value) {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.set({ [COLLAPSED_PEEK_TOP_STORAGE_KEY]: Math.round(value) });
   } catch (e) { /* ignore */ }
 }
 
@@ -350,6 +375,23 @@ function refreshTabsPanel() {
   loadTabs();
 }
 
+function getClampedCollapsedPeekTop(rawTop) {
+  if (!shadowRoot) return 8;
+  const peek = shadowRoot.getElementById('tabs-panel-collapsed-peek');
+  const height = peek?.offsetHeight || 58;
+  const minTop = 8;
+  const maxTop = Math.max(minTop, window.innerHeight - height - 8);
+  return Math.max(minTop, Math.min(maxTop, Number(rawTop) || minTop));
+}
+
+function applyCollapsedPeekPosition() {
+  if (!shadowRoot) return;
+  const peek = shadowRoot.getElementById('tabs-panel-collapsed-peek');
+  if (!peek) return;
+  collapsedPeekTop = getClampedCollapsedPeekTop(collapsedPeekTop);
+  peek.style.top = `${collapsedPeekTop}px`;
+}
+
 // Создание панели с Shadow DOM для изоляции стилей
 function createTabsPanel() {
   if (tabsPanel) return;
@@ -386,11 +428,12 @@ function createTabsPanel() {
         title="Количество столбцов с иконками"
         aria-label="Количество столбцов с иконками"
       >
-      <button id="tabs-panel-toggle" class="tabs-panel-toggle" title="Свернуть панель">❮</button>
+      <button id="tabs-panel-toggle" class="tabs-panel-toggle" title="Свернуть панель">❯</button>
       <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
     </div>
     <div id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek">
-      <button id="tabs-panel-peek-expand" class="tabs-panel-peek-expand" title="Развернуть панель" aria-label="Развернуть панель">❯</button>
+      <div id="tabs-panel-peek-drag" class="tabs-panel-peek-drag" title="Переместить мини-кнопку" aria-label="Переместить мини-кнопку">⋮⋮</div>
+      <button id="tabs-panel-peek-expand" class="tabs-panel-peek-expand" title="Развернуть панель" aria-label="Развернуть панель">❮</button>
       <button id="tabs-panel-peek-close" class="tabs-panel-peek-close" title="Скрыть мини-кнопку" aria-label="Скрыть мини-кнопку">✕</button>
     </div>
     <div class="tabs-panel-search">
@@ -427,7 +470,8 @@ function createTabsPanel() {
     loadStoredPanelWidth(),
     loadStoredCollapsedLauncherEnabled(),
     loadStoredSearchVisible(),
-  ]).then(([storedCols, storedCollapsed, storedWidth, storedLauncherEnabled, storedSearchVisible]) => {
+    loadStoredCollapsedPeekTop(),
+  ]).then(([storedCols, storedCollapsed, storedWidth, storedLauncherEnabled, storedSearchVisible, storedPeekTop]) => {
     if (storedCols !== null) {
       columnsCount = Math.max(1, Math.min(12, storedCols));
     }
@@ -443,12 +487,17 @@ function createTabsPanel() {
     if (storedSearchVisible !== null) {
       searchVisible = storedSearchVisible;
     }
+    if (storedPeekTop !== null) {
+      collapsedPeekTop = storedPeekTop;
+    }
     applyPanelWidth();
+    applyCollapsedPeekPosition();
     updatePanelDomVisibility({ skipAnimation: true });
 
     // Обработчики событий
     setupEventListeners();
     setupResizeHandle();
+    setupCollapsedPeekDrag();
 
     // Применяем настройку количества столбцов (уже с учётом сохранённого значения)
     applyColumnsSetting();
@@ -576,6 +625,51 @@ function setupResizeHandle() {
     }
     storePanelWidth(panelWidth);
   }, true);
+}
+
+function setupCollapsedPeekDrag() {
+  if (!shadowRoot) return;
+  const dragHandle = shadowRoot.getElementById('tabs-panel-peek-drag');
+  const peek = shadowRoot.getElementById('tabs-panel-collapsed-peek');
+  if (!dragHandle || !peek) return;
+
+  let isDragging = false;
+  let startY = 0;
+  let startTop = 0;
+
+  dragHandle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragging = true;
+    startY = e.clientY;
+    startTop = collapsedPeekTop;
+    peek.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const deltaY = e.clientY - startY;
+    collapsedPeekTop = getClampedCollapsedPeekTop(startTop + deltaY);
+    applyCollapsedPeekPosition();
+  }, true);
+
+  window.addEventListener('mouseup', (e) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    isDragging = false;
+    peek.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
+    storeCollapsedPeekTop(collapsedPeekTop);
+  }, true);
+
+  window.addEventListener('resize', () => {
+    applyCollapsedPeekPosition();
+  });
 }
 
 // Переключение видимости панели (по клику на стрелку в хедере)
@@ -1444,6 +1538,12 @@ if (chrome.storage && chrome.storage.onChanged) {
     if (searchChange && typeof searchChange.newValue === 'boolean') {
       searchVisible = searchChange.newValue;
       updatePanelDomVisibility();
+    }
+
+    const peekTopChange = changes[COLLAPSED_PEEK_TOP_STORAGE_KEY];
+    if (peekTopChange && typeof peekTopChange.newValue === 'number' && Number.isFinite(peekTopChange.newValue)) {
+      collapsedPeekTop = peekTopChange.newValue;
+      applyCollapsedPeekPosition();
     }
 
     // Синхронизация свёрнутых групп

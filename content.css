@@ -74,6 +74,29 @@
   z-index: 20;
 }
 
+.tabs-panel-collapsed-peek.dragging {
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.26);
+}
+
+.tabs-panel-peek-drag {
+  width: 24px;
+  height: 14px;
+  border-radius: 6px;
+  color: #6b7280;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  user-select: none;
+}
+
+.tabs-panel-peek-drag:hover {
+  background-color: #eef0f2;
+  color: #374151;
+}
+
 .tabs-panel-peek-expand,
 .tabs-panel-peek-close {
   width: 24px;
