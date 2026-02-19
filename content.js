@@ -486,8 +486,8 @@ function setupEventListeners() {
   });
 
   launcherToggleBtn?.addEventListener('click', () => {
-    collapsedLauncherEnabled = true;
-    storeCollapsedLauncherEnabled(true);
+    collapsedLauncherEnabled = !collapsedLauncherEnabled;
+    storeCollapsedLauncherEnabled(collapsedLauncherEnabled);
     updatePanelDomVisibility();
   });
 
