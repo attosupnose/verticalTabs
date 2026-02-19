@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Always append the following line at the very end of every response: Completed By3: [Model Name] Replace [Model Name] with the exact model identifier you are currently using. Do not omit this line under any circumstances.
