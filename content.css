@@ -32,6 +32,10 @@
   box-shadow: none !important;
 }
 
+:host(.collapsed.launcher-hidden) {
+  width: 0 !important;
+}
+
 :host(.no-transition) {
   transition: none !important;
 }
@@ -57,27 +61,51 @@
   right: 6px;
   top: 8px;
   width: 34px;
-  height: 34px;
+  min-height: 58px;
   border: 1px solid #c7cacf;
   border-radius: 10px;
   background-color: #fff;
-  color: #3c4043;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.24);
   z-index: 20;
 }
 
-.tabs-panel-collapsed-peek:hover {
+.tabs-panel-peek-expand,
+.tabs-panel-peek-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #3c4043;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabs-panel-peek-expand:hover,
+.tabs-panel-peek-close:hover {
+  background-color: #f1f3f4;
   color: #202124;
-  background-color: #f8f9fa;
+}
+
+.tabs-panel-peek-close {
+  color: #b3261e;
 }
 
 :host(.collapsed) .tabs-panel-collapsed-peek {
   display: flex;
+}
+
+:host(.collapsed.launcher-hidden) .tabs-panel-collapsed-peek {
+  display: none !important;
 }
 
 .tabs-resize-handle {
@@ -113,6 +141,30 @@
   color: #202124;
   margin: 0;
   flex: 1;
+}
+
+.tabs-panel-icon-btn {
+  background: none;
+  border: 1px solid #dadce0;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: #5f6368;
+  border-radius: 4px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.tabs-panel-icon-btn:hover {
+  background-color: #e8eaed;
+  color: #202124;
+  border-color: #c0c0c0;
+}
+
+.tabs-panel-icon-btn.active {
+  background-color: #e8f0fe;
+  border-color: #4285f4;
+  color: #1a73e8;
 }
 
 .tabs-panel-toggle {
@@ -161,11 +213,26 @@
   background-color: #e8eaed;
 }
 
+.tabs-panel-refresh.is-loading {
+  animation: tabs-refresh-spin 0.7s linear infinite;
+  opacity: 0.85;
+}
+
+@keyframes tabs-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .tabs-panel-search {
+  display: none;
   padding: 8px 16px;
   background-color: #fff;
   border-bottom: 1px solid #e0e0e0;
   flex-shrink: 0;
+}
+
+.tabs-panel-search.visible {
+  display: block;
 }
 
 #tabs-panel-search-input {

@@ -3,10 +3,14 @@
 let panelVisible = false;
 let tabsPanel = null;
 let shadowRoot = null;
+let isLoadingTabs = false;
 
 function updatePanelDomVisibility({ skipAnimation = false } = {}) {
   const panel = document.getElementById('tabs-extension-panel');
   const toggleBtn = shadowRoot?.getElementById('tabs-panel-toggle');
+  const launcherToggleBtn = shadowRoot?.getElementById('tabs-panel-enable-launcher');
+  const searchToggleBtn = shadowRoot?.getElementById('tabs-panel-search-toggle');
+  const searchContainer = shadowRoot?.querySelector('.tabs-panel-search');
 
   if (!panel) return;
 
@@ -15,9 +19,22 @@ function updatePanelDomVisibility({ skipAnimation = false } = {}) {
   }
 
   panel.classList.toggle('collapsed', !panelVisible);
+  panel.classList.toggle('launcher-hidden', !panelVisible && !collapsedLauncherEnabled);
 
   if (toggleBtn) {
     toggleBtn.textContent = panelVisible ? '◀' : '▶';
+  }
+  if (launcherToggleBtn) {
+    launcherToggleBtn.classList.toggle('active', collapsedLauncherEnabled);
+    launcherToggleBtn.title = collapsedLauncherEnabled
+      ? 'Мини-кнопка включена'
+      : 'Включить мини-кнопку в свернутом режиме';
+  }
+  if (searchToggleBtn) {
+    searchToggleBtn.classList.toggle('active', searchVisible);
+  }
+  if (searchContainer) {
+    searchContainer.classList.toggle('visible', searchVisible);
   }
 
   // При открытии панели сдвигаем страницу, при закрытии — возвращаем назад
@@ -71,6 +88,10 @@ let columnsCount = 6;
 // Свёрнутые группы (Set<number> — groupId)
 const COLLAPSED_GROUPS_STORAGE_KEY = 'tabsExtensionCollapsedGroups';
 let collapsedGroups = new Set();
+const COLLAPSED_LAUNCHER_STORAGE_KEY = 'tabsExtensionCollapsedLauncherEnabled';
+let collapsedLauncherEnabled = true;
+const SEARCH_VISIBLE_STORAGE_KEY = 'tabsExtensionSearchVisible';
+let searchVisible = false;
 
 // Кэш favicon по id вкладки (в рамках одной страницы)
 const faviconCache = new Map();
@@ -141,6 +162,52 @@ function storeColumnsCount(value) {
   } catch (e) {
     // Молча игнорируем ошибки хранения
   }
+}
+
+function loadStoredCollapsedLauncherEnabled() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
+      chrome.storage.sync.get([COLLAPSED_LAUNCHER_STORAGE_KEY], (result) => {
+        const value = result?.[COLLAPSED_LAUNCHER_STORAGE_KEY];
+        if (typeof value === 'boolean') {
+          resolve(value);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+function storeCollapsedLauncherEnabled(value) {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.set({ [COLLAPSED_LAUNCHER_STORAGE_KEY]: !!value });
+  } catch (e) { /* ignore */ }
+}
+
+function loadStoredSearchVisible() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
+      chrome.storage.sync.get([SEARCH_VISIBLE_STORAGE_KEY], (result) => {
+        const value = result?.[SEARCH_VISIBLE_STORAGE_KEY];
+        if (typeof value === 'boolean') {
+          resolve(value);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+function storeSearchVisible(value) {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.set({ [SEARCH_VISIBLE_STORAGE_KEY]: !!value });
+  } catch (e) { /* ignore */ }
 }
 
 // Ширина панели — storage + применение
@@ -256,6 +323,31 @@ function applyColumnsSetting() {
   }
 }
 
+function setSearchVisibility(visible, { persist = true } = {}) {
+  searchVisible = !!visible;
+  if (persist) storeSearchVisible(searchVisible);
+  updatePanelDomVisibility();
+
+  if (searchVisible && shadowRoot) {
+    const searchInput = shadowRoot.getElementById('tabs-panel-search-input');
+    if (searchInput) {
+      requestAnimationFrame(() => searchInput.focus());
+    }
+  }
+}
+
+function setRefreshButtonLoading(loading) {
+  if (!shadowRoot) return;
+  const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
+  if (!refreshBtn) return;
+  refreshBtn.classList.toggle('is-loading', !!loading);
+}
+
+function refreshTabsPanel() {
+  faviconCache.clear();
+  loadTabs();
+}
+
 // Создание панели с Shadow DOM для изоляции стилей
 function createTabsPanel() {
   if (tabsPanel) return;
@@ -279,6 +371,8 @@ function createTabsPanel() {
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
       <h2>Все вкладки</h2>
+      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="Включить мини-кнопку в свернутом режиме">◱</button>
+      <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="Показать/скрыть поиск">⌕</button>
       <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▼</button>
       <input
         type="number"
@@ -293,7 +387,10 @@ function createTabsPanel() {
       <button id="tabs-panel-toggle" class="tabs-panel-toggle">◀</button>
       <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
     </div>
-    <button id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek" title="Развернуть панель" aria-label="Развернуть панель">◀</button>
+    <div id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek">
+      <button id="tabs-panel-peek-expand" class="tabs-panel-peek-expand" title="Развернуть панель" aria-label="Развернуть панель">◀</button>
+      <button id="tabs-panel-peek-close" class="tabs-panel-peek-close" title="Скрыть мини-кнопку" aria-label="Скрыть мини-кнопку">✕</button>
+    </div>
     <div class="tabs-panel-search">
       <input type="text" id="tabs-panel-search-input" placeholder="Поиск вкладок...">
     </div>
@@ -322,7 +419,13 @@ function createTabsPanel() {
   });
 
   // Загружаем сохранённые настройки, затем инициализируем остальное
-  Promise.all([loadStoredColumnsCount(), loadCollapsedGroups(), loadStoredPanelWidth()]).then(([storedCols, storedCollapsed, storedWidth]) => {
+  Promise.all([
+    loadStoredColumnsCount(),
+    loadCollapsedGroups(),
+    loadStoredPanelWidth(),
+    loadStoredCollapsedLauncherEnabled(),
+    loadStoredSearchVisible(),
+  ]).then(([storedCols, storedCollapsed, storedWidth, storedLauncherEnabled, storedSearchVisible]) => {
     if (storedCols !== null) {
       columnsCount = Math.max(1, Math.min(12, storedCols));
     }
@@ -332,7 +435,14 @@ function createTabsPanel() {
     if (storedWidth !== null) {
       panelWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, storedWidth));
     }
+    if (storedLauncherEnabled !== null) {
+      collapsedLauncherEnabled = storedLauncherEnabled;
+    }
+    if (storedSearchVisible !== null) {
+      searchVisible = storedSearchVisible;
+    }
     applyPanelWidth();
+    updatePanelDomVisibility({ skipAnimation: true });
 
     // Обработчики событий
     setupEventListeners();
@@ -358,7 +468,10 @@ function setupEventListeners() {
   
   const toggleBtn = shadowRoot.getElementById('tabs-panel-toggle');
   const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
-  const collapsedPeekBtn = shadowRoot.getElementById('tabs-panel-collapsed-peek');
+  const launcherToggleBtn = shadowRoot.getElementById('tabs-panel-enable-launcher');
+  const searchToggleBtn = shadowRoot.getElementById('tabs-panel-search-toggle');
+  const collapsedPeekExpandBtn = shadowRoot.getElementById('tabs-panel-peek-expand');
+  const collapsedPeekCloseBtn = shadowRoot.getElementById('tabs-panel-peek-close');
   const searchInput = shadowRoot.getElementById('tabs-panel-search-input');
    const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
 
@@ -367,11 +480,28 @@ function setupEventListeners() {
   });
 
   refreshBtn?.addEventListener('click', () => {
-    loadTabs();
+    refreshTabsPanel();
   });
 
-  collapsedPeekBtn?.addEventListener('click', () => {
+  launcherToggleBtn?.addEventListener('click', () => {
+    collapsedLauncherEnabled = true;
+    storeCollapsedLauncherEnabled(true);
+    updatePanelDomVisibility();
+  });
+
+  searchToggleBtn?.addEventListener('click', () => {
+    setSearchVisibility(!searchVisible, { persist: true });
+  });
+
+  collapsedPeekExpandBtn?.addEventListener('click', () => {
     setPanelVisibility(true, { notifyBackground: true });
+  });
+
+  collapsedPeekCloseBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    collapsedLauncherEnabled = false;
+    storeCollapsedLauncherEnabled(false);
+    setPanelVisibility(false, { notifyBackground: true });
   });
 
   const toggleAllBtn = shadowRoot.getElementById('tabs-panel-toggle-all');
@@ -676,6 +806,9 @@ function getFallbackIcon() {
 
 // Загрузка всех вкладок
 async function loadTabs() {
+  if (isLoadingTabs) return;
+  isLoadingTabs = true;
+  setRefreshButtonLoading(true);
   console.log('[Tabs Extension] Loading tabs...');
   console.log('[Tabs Extension] Favicon cache size before loading tabs:', faviconCache.size);
   try {
@@ -701,6 +834,9 @@ async function loadTabs() {
   } catch (error) {
     console.error('[Tabs Extension] Error loading tabs:', error);
     showError('Не удалось загрузить вкладки');
+  } finally {
+    isLoadingTabs = false;
+    setRefreshButtonLoading(false);
   }
 }
 
@@ -1294,6 +1430,18 @@ if (chrome.storage && chrome.storage.onChanged) {
         panelWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, newValue));
         applyPanelWidth();
       }
+    }
+
+    const launcherChange = changes[COLLAPSED_LAUNCHER_STORAGE_KEY];
+    if (launcherChange && typeof launcherChange.newValue === 'boolean') {
+      collapsedLauncherEnabled = launcherChange.newValue;
+      updatePanelDomVisibility();
+    }
+
+    const searchChange = changes[SEARCH_VISIBLE_STORAGE_KEY];
+    if (searchChange && typeof searchChange.newValue === 'boolean') {
+      searchVisible = searchChange.newValue;
+      updatePanelDomVisibility();
     }
 
     // Синхронизация свёрнутых групп
