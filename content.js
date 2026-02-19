@@ -85,6 +85,8 @@ let originalBodyTransition = '';
 // Настройки количества столбцов с иконками вкладок
 const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
 let columnsCount = 6;
+const SPREAD_LAYOUT_STORAGE_KEY = 'tabsExtensionSpreadLayoutEnabled';
+let spreadLayoutEnabled = false;
 
 // Свёрнутые группы (Set<number> — groupId)
 const COLLAPSED_GROUPS_STORAGE_KEY = 'tabsExtensionCollapsedGroups';
@@ -165,6 +167,29 @@ function storeColumnsCount(value) {
   } catch (e) {
     // Молча игнорируем ошибки хранения
   }
+}
+
+function loadStoredSpreadLayoutEnabled() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
+      chrome.storage.sync.get([SPREAD_LAYOUT_STORAGE_KEY], (result) => {
+        const value = result?.[SPREAD_LAYOUT_STORAGE_KEY];
+        if (typeof value === 'boolean') {
+          resolve(value);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+function storeSpreadLayoutEnabled(value) {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.set({ [SPREAD_LAYOUT_STORAGE_KEY]: !!value });
+  } catch (e) { /* ignore */ }
 }
 
 function loadStoredCollapsedLauncherEnabled() {
@@ -344,10 +369,27 @@ function applyColumnsSetting() {
   if (safeColumns === 1) {
     content.style.gridTemplateColumns = '1fr';
     content.classList.add('single-column');
+    content.classList.remove('spread-layout');
+  } else if (spreadLayoutEnabled) {
+    content.style.gridTemplateColumns = `repeat(${safeColumns}, minmax(0, 1fr))`;
+    content.classList.remove('single-column');
+    content.classList.add('spread-layout');
   } else {
     content.style.gridTemplateColumns = `repeat(${safeColumns}, 40px)`;
     content.classList.remove('single-column');
+    content.classList.remove('spread-layout');
   }
+}
+
+function updateLayoutToggleButton() {
+  if (!shadowRoot) return;
+  const btn = shadowRoot.getElementById('tabs-panel-layout-toggle');
+  if (!btn) return;
+  btn.classList.toggle('active', spreadLayoutEnabled);
+  btn.textContent = spreadLayoutEnabled ? '↔ Равномерно' : '⇥ Слева';
+  btn.title = spreadLayoutEnabled
+    ? 'Выключить равномерную раскладку'
+    : 'Включить равномерную раскладку';
 }
 
 function setSearchVisibility(visible, { persist = true } = {}) {
@@ -414,7 +456,7 @@ function createTabsPanel() {
   panelContainer.className = 'tabs-panel-container';
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
-      <h2>Все вкладки</h2>
+      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="Включить равномерную раскладку">⇥ Слева</button>
       <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="Включить мини-кнопку в свернутом режиме">📌</button>
       <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="Показать/скрыть поиск">🔍</button>
       <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▾▾</button>
@@ -466,14 +508,18 @@ function createTabsPanel() {
   // Загружаем сохранённые настройки, затем инициализируем остальное
   Promise.all([
     loadStoredColumnsCount(),
+    loadStoredSpreadLayoutEnabled(),
     loadCollapsedGroups(),
     loadStoredPanelWidth(),
     loadStoredCollapsedLauncherEnabled(),
     loadStoredSearchVisible(),
     loadStoredCollapsedPeekTop(),
-  ]).then(([storedCols, storedCollapsed, storedWidth, storedLauncherEnabled, storedSearchVisible, storedPeekTop]) => {
+  ]).then(([storedCols, storedSpreadLayout, storedCollapsed, storedWidth, storedLauncherEnabled, storedSearchVisible, storedPeekTop]) => {
     if (storedCols !== null) {
       columnsCount = Math.max(1, Math.min(12, storedCols));
+    }
+    if (storedSpreadLayout !== null) {
+      spreadLayoutEnabled = storedSpreadLayout;
     }
     if (storedCollapsed !== null) {
       collapsedGroups = storedCollapsed;
@@ -493,6 +539,7 @@ function createTabsPanel() {
     applyPanelWidth();
     applyCollapsedPeekPosition();
     updatePanelDomVisibility({ skipAnimation: true });
+    updateLayoutToggleButton();
 
     // Обработчики событий
     setupEventListeners();
@@ -519,6 +566,7 @@ function setupEventListeners() {
   
   const toggleBtn = shadowRoot.getElementById('tabs-panel-toggle');
   const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
+  const layoutToggleBtn = shadowRoot.getElementById('tabs-panel-layout-toggle');
   const launcherToggleBtn = shadowRoot.getElementById('tabs-panel-enable-launcher');
   const searchToggleBtn = shadowRoot.getElementById('tabs-panel-search-toggle');
   const collapsedPeekExpandBtn = shadowRoot.getElementById('tabs-panel-peek-expand');
@@ -528,6 +576,13 @@ function setupEventListeners() {
 
   toggleBtn?.addEventListener('click', () => {
     togglePanel();
+  });
+
+  layoutToggleBtn?.addEventListener('click', () => {
+    spreadLayoutEnabled = !spreadLayoutEnabled;
+    storeSpreadLayoutEnabled(spreadLayoutEnabled);
+    applyColumnsSetting();
+    updateLayoutToggleButton();
   });
 
   refreshBtn?.addEventListener('click', () => {
@@ -1516,6 +1571,13 @@ if (chrome.storage && chrome.storage.onChanged) {
         }
         applyColumnsSetting();
       }
+    }
+
+    const spreadLayoutChange = changes[SPREAD_LAYOUT_STORAGE_KEY];
+    if (spreadLayoutChange && typeof spreadLayoutChange.newValue === 'boolean') {
+      spreadLayoutEnabled = spreadLayoutChange.newValue;
+      applyColumnsSetting();
+      updateLayoutToggleButton();
     }
 
     // Синхронизация ширины панели
