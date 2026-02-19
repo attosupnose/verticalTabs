@@ -602,11 +602,11 @@ function createTabsPanel() {
   panelContainer.className = 'tabs-panel-container';
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
-      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="${t('layoutOff')}">↔</button>
-      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="${t('launcherDisabled')}">📌</button>
-      <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="${t('searchToggle')}">🔍</button>
-      <button id="tabs-panel-language-toggle" class="tabs-panel-icon-btn" title="${t('languageTitle')}">EN</button>
-      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="${t('collapseAllGroups')}" style="display:none">▾▾</button>
+      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle tabs-panel-header-btn" title="${t('layoutOff')}">↔</button>
+      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('launcherDisabled')}">⌗</button>
+      <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('searchToggle')}">⌕</button>
+      <button id="tabs-panel-language-toggle" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('languageTitle')}">EN</button>
+      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all tabs-panel-header-btn" title="${t('collapseAllGroups')}" style="display:none">▾▾</button>
       <input
         type="number"
         id="tabs-panel-cols-input"
@@ -617,8 +617,8 @@ function createTabsPanel() {
         title="${t('columnsCountLabel')}"
         aria-label="${t('columnsCountLabel')}"
       >
-      <button id="tabs-panel-toggle" class="tabs-panel-toggle" title="${t('collapsePanel')}">❯</button>
-      <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="${t('refresh')}">🔄</button>
+      <button id="tabs-panel-toggle" class="tabs-panel-toggle tabs-panel-header-btn" title="${t('collapsePanel')}">❯</button>
+      <button id="tabs-panel-refresh" class="tabs-panel-refresh tabs-panel-header-btn" title="${t('refresh')}">↻</button>
     </div>
     <div id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek">
       <div id="tabs-panel-peek-drag" class="tabs-panel-peek-drag" title="${t('dragMiniButton')}" aria-label="${t('dragMiniButton')}">⋮⋮</div>
