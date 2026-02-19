@@ -19,6 +19,8 @@ chrome.action.onClicked.addListener(async (tab) => {
   } catch (error) {
     // Если content script еще не загружен, инжектируем его
     try {
+      const windowId = tab.windowId;
+      const desiredVisible = !!panelVisibilityByWindow[windowId];
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['content.js']
@@ -27,18 +29,11 @@ chrome.action.onClicked.addListener(async (tab) => {
         target: { tabId: tab.id },
         files: ['content.css']
       });
-      // Ждем немного и отправляем сообщение
-      setTimeout(async () => {
-        const windowId = tab.windowId;
-        const currentVisible = !!panelVisibilityByWindow[windowId];
-        const newVisible = !currentVisible;
-        panelVisibilityByWindow[windowId] = newVisible;
-
-        await chrome.tabs.sendMessage(tab.id, {
-          action: 'setPanelVisibility',
-          visible: newVisible,
-        });
-      }, 100);
+      // Отправляем то же целевое состояние, без повторного toggle
+      await chrome.tabs.sendMessage(tab.id, {
+        action: 'setPanelVisibility',
+        visible: desiredVisible,
+      });
     } catch (err) {
       console.error('Ошибка инжекции скрипта:', err);
     }
@@ -121,6 +116,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       panelVisibilityByWindow[sender.tab.windowId] = !!message.visible;
     }
     return;
+  }
+
+  if (message.action === 'getPanelVisibility') {
+    if (sender && sender.tab && typeof sender.tab.windowId === 'number') {
+      sendResponse({ visible: !!panelVisibilityByWindow[sender.tab.windowId] });
+    } else {
+      sendResponse({ visible: false });
+    }
+    return true;
   }
 });
 

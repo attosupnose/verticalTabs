@@ -4,11 +4,15 @@ let panelVisible = false;
 let tabsPanel = null;
 let shadowRoot = null;
 
-function updatePanelDomVisibility() {
+function updatePanelDomVisibility({ skipAnimation = false } = {}) {
   const panel = document.getElementById('tabs-extension-panel');
   const toggleBtn = shadowRoot?.getElementById('tabs-panel-toggle');
 
   if (!panel) return;
+
+  if (skipAnimation) {
+    panel.classList.add('no-transition');
+  }
 
   panel.classList.toggle('collapsed', !panelVisible);
 
@@ -24,16 +28,22 @@ function updatePanelDomVisibility() {
   } else {
     removePageShift();
   }
+
+  if (skipAnimation) {
+    requestAnimationFrame(() => {
+      panel.classList.remove('no-transition');
+    });
+  }
 }
 
-function setPanelVisibility(visible, { notifyBackground = false } = {}) {
+function setPanelVisibility(visible, { notifyBackground = false, skipAnimation = false } = {}) {
   panelVisible = !!visible;
 
   if (!tabsPanel) {
     createTabsPanel();
   }
 
-  updatePanelDomVisibility();
+  updatePanelDomVisibility({ skipAnimation });
 
   if (notifyBackground) {
     chrome.runtime.sendMessage({
@@ -298,6 +308,18 @@ function createTabsPanel() {
   shadowRoot.appendChild(panelContainer);
   document.body.appendChild(tabsPanel);
 
+  // Применяем стартовое состояние без анимации, чтобы не мигало при инициализации
+  updatePanelDomVisibility({ skipAnimation: true });
+
+  // Синхронизируем фактическую видимость из background (по окну) тоже без анимации
+  chrome.runtime.sendMessage({ action: 'getPanelVisibility' }).then((response) => {
+    if (response && typeof response.visible === 'boolean') {
+      setPanelVisibility(response.visible, { notifyBackground: false, skipAnimation: true });
+    }
+  }).catch(() => {
+    // Если background недоступен, остаёмся в локальном состоянии
+  });
+
   // Загружаем сохранённые настройки, затем инициализируем остальное
   Promise.all([loadStoredColumnsCount(), loadCollapsedGroups(), loadStoredPanelWidth()]).then(([storedCols, storedCollapsed, storedWidth]) => {
     if (storedCols !== null) {
@@ -327,9 +349,6 @@ function createTabsPanel() {
     // Загружаем вкладки
     loadTabs();
   });
-
-   // Применяем текущее состояние видимости (по умолчанию скрыта)
-   updatePanelDomVisibility();
 }
 
 // Настройка обработчиков событий

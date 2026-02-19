@@ -30,6 +30,10 @@
   transform: translateX(calc(100% - 1px));
 }
 
+:host(.no-transition) {
+  transition: none !important;
+}
+
 .tabs-panel-container {
   position: relative;
   display: flex;
