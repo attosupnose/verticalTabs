@@ -293,6 +293,7 @@ function createTabsPanel() {
       <button id="tabs-panel-toggle" class="tabs-panel-toggle">◀</button>
       <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
     </div>
+    <button id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek" title="Развернуть панель" aria-label="Развернуть панель">◀</button>
     <div class="tabs-panel-search">
       <input type="text" id="tabs-panel-search-input" placeholder="Поиск вкладок...">
     </div>
@@ -357,6 +358,7 @@ function setupEventListeners() {
   
   const toggleBtn = shadowRoot.getElementById('tabs-panel-toggle');
   const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
+  const collapsedPeekBtn = shadowRoot.getElementById('tabs-panel-collapsed-peek');
   const searchInput = shadowRoot.getElementById('tabs-panel-search-input');
    const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
 
@@ -366,6 +368,10 @@ function setupEventListeners() {
 
   refreshBtn?.addEventListener('click', () => {
     loadTabs();
+  });
+
+  collapsedPeekBtn?.addEventListener('click', () => {
+    setPanelVisibility(true, { notifyBackground: true });
   });
 
   const toggleAllBtn = shadowRoot.getElementById('tabs-panel-toggle-all');
