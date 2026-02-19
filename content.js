@@ -23,13 +23,13 @@ function updatePanelDomVisibility({ skipAnimation = false } = {}) {
 
   if (toggleBtn) {
     toggleBtn.textContent = panelVisible ? '❯' : '❮';
-    toggleBtn.title = panelVisible ? 'Свернуть панель' : 'Развернуть панель';
+    toggleBtn.title = panelVisible ? t('collapsePanel') : t('expandPanel');
   }
   if (launcherToggleBtn) {
     launcherToggleBtn.classList.toggle('active', collapsedLauncherEnabled);
     launcherToggleBtn.title = collapsedLauncherEnabled
-      ? 'Мини-кнопка включена'
-      : 'Включить мини-кнопку в свернутом режиме';
+      ? t('launcherEnabled')
+      : t('launcherDisabled');
   }
   if (searchToggleBtn) {
     searchToggleBtn.classList.toggle('active', searchVisible);
@@ -100,6 +100,62 @@ const SEARCH_VISIBLE_STORAGE_KEY = 'tabsExtensionSearchVisible';
 let searchVisible = false;
 const COLLAPSED_PEEK_TOP_STORAGE_KEY = 'tabsExtensionCollapsedPeekTop';
 let collapsedPeekTop = 8;
+const LANGUAGE_STORAGE_KEY = 'tabsExtensionLanguage';
+let currentLanguage = 'en';
+const I18N = {
+  ru: {
+    collapsePanel: 'Свернуть панель',
+    expandPanel: 'Развернуть панель',
+    launcherEnabled: 'Мини-кнопка включена',
+    launcherDisabled: 'Включить мини-кнопку в свернутом режиме',
+    layoutOn: 'Выключить равномерную раскладку',
+    layoutOff: 'Включить равномерную раскладку',
+    expandAllGroups: 'Развернуть все группы',
+    collapseAllGroups: 'Свернуть все группы',
+    searchToggle: 'Показать/скрыть поиск',
+    refresh: 'Обновить',
+    searchPlaceholder: 'Поиск вкладок...',
+    expandPanelLabel: 'Развернуть панель',
+    hideMiniButtonLabel: 'Скрыть мини-кнопку',
+    dragMiniButton: 'Переместить мини-кнопку',
+    noTitle: 'Без названия',
+    group: 'Группа',
+    groupTabs: 'Группа вкладок',
+    close: 'Закрыть',
+    tabsNotFound: 'Вкладки не найдены',
+    loadFailed: 'Не удалось загрузить вкладки',
+    languageTitle: 'Переключить язык (RU/EN)',
+    columnsCountLabel: 'Количество столбцов с иконками',
+  },
+  en: {
+    collapsePanel: 'Collapse panel',
+    expandPanel: 'Expand panel',
+    launcherEnabled: 'Mini button enabled',
+    launcherDisabled: 'Enable mini button in collapsed mode',
+    layoutOn: 'Disable even layout',
+    layoutOff: 'Enable even layout',
+    expandAllGroups: 'Expand all groups',
+    collapseAllGroups: 'Collapse all groups',
+    searchToggle: 'Show/hide search',
+    refresh: 'Refresh',
+    searchPlaceholder: 'Search tabs...',
+    expandPanelLabel: 'Expand panel',
+    hideMiniButtonLabel: 'Hide mini button',
+    dragMiniButton: 'Move mini button',
+    noTitle: 'Untitled',
+    group: 'Group',
+    groupTabs: 'Tab group',
+    close: 'Close',
+    tabsNotFound: 'No tabs found',
+    loadFailed: 'Failed to load tabs',
+    languageTitle: 'Switch language (RU/EN)',
+    columnsCountLabel: 'Number of icon columns',
+  },
+};
+
+function t(key) {
+  return I18N[currentLanguage]?.[key] || I18N.ru[key] || key;
+}
 
 // Кэш favicon по id вкладки (в рамках одной страницы)
 const faviconCache = new Map();
@@ -241,6 +297,30 @@ function storeSearchVisible(value) {
   } catch (e) { /* ignore */ }
 }
 
+function loadStoredLanguage() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
+      chrome.storage.sync.get([LANGUAGE_STORAGE_KEY], (result) => {
+        const value = result?.[LANGUAGE_STORAGE_KEY];
+        if (value === 'ru' || value === 'en') {
+          resolve(value);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+function storeLanguage(lang) {
+  try {
+    if (!chrome.storage || !chrome.storage.sync) return;
+    if (lang !== 'ru' && lang !== 'en') return;
+    chrome.storage.sync.set({ [LANGUAGE_STORAGE_KEY]: lang });
+  } catch (e) { /* ignore */ }
+}
+
 function loadStoredCollapsedPeekTop() {
   return new Promise((resolve) => {
     try {
@@ -357,7 +437,7 @@ function updateToggleAllButton() {
   const hasGroups = allGroupIds.length > 0;
   const allCollapsed = hasGroups && allGroupIds.every(id => collapsedGroups.has(id));
   btn.textContent = allCollapsed ? '▸▸' : '▾▾';
-  btn.title = allCollapsed ? 'Развернуть все группы' : 'Свернуть все группы';
+  btn.title = allCollapsed ? t('expandAllGroups') : t('collapseAllGroups');
   btn.style.display = hasGroups ? '' : 'none';
 }
 
@@ -408,8 +488,52 @@ function updateLayoutToggleButton() {
   btn.classList.toggle('active', spreadLayoutEnabled);
   btn.textContent = spreadLayoutEnabled ? '↤' : '↔';
   btn.title = spreadLayoutEnabled
-    ? 'Выключить равномерную раскладку'
-    : 'Включить равномерную раскладку';
+    ? t('layoutOn')
+    : t('layoutOff');
+}
+
+function applyLanguageUI({ rerenderTabs = false } = {}) {
+  if (!shadowRoot) return;
+  const searchInput = shadowRoot.getElementById('tabs-panel-search-input');
+  const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
+  const searchToggleBtn = shadowRoot.getElementById('tabs-panel-search-toggle');
+  const languageBtn = shadowRoot.getElementById('tabs-panel-language-toggle');
+  const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
+  const peekExpandBtn = shadowRoot.getElementById('tabs-panel-peek-expand');
+  const peekCloseBtn = shadowRoot.getElementById('tabs-panel-peek-close');
+  const peekDrag = shadowRoot.getElementById('tabs-panel-peek-drag');
+
+  if (searchInput) searchInput.placeholder = t('searchPlaceholder');
+  if (refreshBtn) refreshBtn.title = t('refresh');
+  if (searchToggleBtn) searchToggleBtn.title = t('searchToggle');
+  if (peekExpandBtn) {
+    peekExpandBtn.title = t('expandPanelLabel');
+    peekExpandBtn.setAttribute('aria-label', t('expandPanelLabel'));
+  }
+  if (peekCloseBtn) {
+    peekCloseBtn.title = t('hideMiniButtonLabel');
+    peekCloseBtn.setAttribute('aria-label', t('hideMiniButtonLabel'));
+  }
+  if (peekDrag) {
+    peekDrag.title = t('dragMiniButton');
+    peekDrag.setAttribute('aria-label', t('dragMiniButton'));
+  }
+  if (languageBtn) {
+    languageBtn.textContent = currentLanguage === 'ru' ? 'RU' : 'EN';
+    languageBtn.title = t('languageTitle');
+  }
+  if (colsInput) {
+    colsInput.title = t('columnsCountLabel');
+    colsInput.setAttribute('aria-label', t('columnsCountLabel'));
+  }
+
+  updateLayoutToggleButton();
+  updateToggleAllButton();
+  updatePanelDomVisibility();
+
+  if (rerenderTabs) {
+    renderTabs();
+  }
 }
 
 function setSearchVisibility(visible, { persist = true } = {}) {
@@ -476,10 +600,11 @@ function createTabsPanel() {
   panelContainer.className = 'tabs-panel-container';
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
-      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="Включить равномерную раскладку">↔</button>
-      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="Включить мини-кнопку в свернутом режиме">📌</button>
-      <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="Показать/скрыть поиск">🔍</button>
-      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▾▾</button>
+      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="${t('layoutOff')}">↔</button>
+      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="${t('launcherDisabled')}">📌</button>
+      <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="${t('searchToggle')}">🔍</button>
+      <button id="tabs-panel-language-toggle" class="tabs-panel-icon-btn" title="${t('languageTitle')}">EN</button>
+      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="${t('collapseAllGroups')}" style="display:none">▾▾</button>
       <input
         type="number"
         id="tabs-panel-cols-input"
@@ -487,19 +612,19 @@ function createTabsPanel() {
         min="1"
         max="12"
         value="6"
-        title="Количество столбцов с иконками"
-        aria-label="Количество столбцов с иконками"
+        title="${t('columnsCountLabel')}"
+        aria-label="${t('columnsCountLabel')}"
       >
-      <button id="tabs-panel-toggle" class="tabs-panel-toggle" title="Свернуть панель">❯</button>
-      <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
+      <button id="tabs-panel-toggle" class="tabs-panel-toggle" title="${t('collapsePanel')}">❯</button>
+      <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="${t('refresh')}">🔄</button>
     </div>
     <div id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek">
-      <div id="tabs-panel-peek-drag" class="tabs-panel-peek-drag" title="Переместить мини-кнопку" aria-label="Переместить мини-кнопку">⋮⋮</div>
-      <button id="tabs-panel-peek-expand" class="tabs-panel-peek-expand" title="Развернуть панель" aria-label="Развернуть панель">❮</button>
-      <button id="tabs-panel-peek-close" class="tabs-panel-peek-close" title="Скрыть мини-кнопку" aria-label="Скрыть мини-кнопку">✕</button>
+      <div id="tabs-panel-peek-drag" class="tabs-panel-peek-drag" title="${t('dragMiniButton')}" aria-label="${t('dragMiniButton')}">⋮⋮</div>
+      <button id="tabs-panel-peek-expand" class="tabs-panel-peek-expand" title="${t('expandPanelLabel')}" aria-label="${t('expandPanelLabel')}">❮</button>
+      <button id="tabs-panel-peek-close" class="tabs-panel-peek-close" title="${t('hideMiniButtonLabel')}" aria-label="${t('hideMiniButtonLabel')}">✕</button>
     </div>
     <div class="tabs-panel-search">
-      <input type="text" id="tabs-panel-search-input" placeholder="Поиск вкладок...">
+      <input type="text" id="tabs-panel-search-input" placeholder="${t('searchPlaceholder')}">
     </div>
     <div id="tabs-panel-content" class="tabs-panel-content">
       <div class="tabs-loading">Загрузка вкладок...</div>
@@ -534,7 +659,8 @@ function createTabsPanel() {
     loadStoredCollapsedLauncherEnabled(),
     loadStoredSearchVisible(),
     loadStoredCollapsedPeekTop(),
-  ]).then(([storedCols, storedSpreadLayout, storedCollapsed, storedWidth, storedLauncherEnabled, storedSearchVisible, storedPeekTop]) => {
+    loadStoredLanguage(),
+  ]).then(([storedCols, storedSpreadLayout, storedCollapsed, storedWidth, storedLauncherEnabled, storedSearchVisible, storedPeekTop, storedLanguage]) => {
     if (storedCols !== null) {
       columnsCount = Math.max(1, Math.min(12, storedCols));
     }
@@ -556,10 +682,13 @@ function createTabsPanel() {
     if (storedPeekTop !== null) {
       collapsedPeekTop = storedPeekTop;
     }
+    if (storedLanguage !== null) {
+      currentLanguage = storedLanguage;
+    }
     applyPanelWidth();
     applyCollapsedPeekPosition();
+    applyLanguageUI({ rerenderTabs: false });
     updatePanelDomVisibility({ skipAnimation: true });
-    updateLayoutToggleButton();
 
     // Обработчики событий
     setupEventListeners();
@@ -587,6 +716,7 @@ function setupEventListeners() {
   const toggleBtn = shadowRoot.getElementById('tabs-panel-toggle');
   const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
   const layoutToggleBtn = shadowRoot.getElementById('tabs-panel-layout-toggle');
+  const languageToggleBtn = shadowRoot.getElementById('tabs-panel-language-toggle');
   const launcherToggleBtn = shadowRoot.getElementById('tabs-panel-enable-launcher');
   const searchToggleBtn = shadowRoot.getElementById('tabs-panel-search-toggle');
   const collapsedPeekExpandBtn = shadowRoot.getElementById('tabs-panel-peek-expand');
@@ -603,6 +733,12 @@ function setupEventListeners() {
     storeSpreadLayoutEnabled(spreadLayoutEnabled);
     applyColumnsSetting();
     updateLayoutToggleButton();
+  });
+
+  languageToggleBtn?.addEventListener('click', () => {
+    currentLanguage = currentLanguage === 'ru' ? 'en' : 'ru';
+    storeLanguage(currentLanguage);
+    applyLanguageUI({ rerenderTabs: true });
   });
 
   refreshBtn?.addEventListener('click', () => {
@@ -1006,7 +1142,7 @@ async function loadTabs() {
     renderTabs();
   } catch (error) {
     console.error('[Tabs Extension] Error loading tabs:', error);
-    showError('Не удалось загрузить вкладки');
+    showError(t('loadFailed'));
   } finally {
     isLoadingTabs = false;
     setRefreshButtonLoading(false);
@@ -1049,7 +1185,7 @@ function renderTabs() {
     content.innerHTML = `
       <div class="tabs-empty-state">
         <div class="tabs-empty-icon">📑</div>
-        <div class="tabs-empty-text">Вкладки не найдены</div>
+        <div class="tabs-empty-text">${t('tabsNotFound')}</div>
       </div>
     `;
     return;
@@ -1175,7 +1311,7 @@ function updateTabElementInPlace(el, tab, activeTab, currentWindowId) {
   if (isOtherWindow) className += ' other-window';
   if (el.className !== className) el.className = className;
 
-  const tabTitle = tab.title || 'Без названия';
+  const tabTitle = tab.title || t('noTitle');
   if (el.title !== tabTitle) el.title = tabTitle;
 
   const titleSpan = el.querySelector('.tabs-tab-title');
@@ -1208,7 +1344,7 @@ function updateGroupMarkerInPlace(el, group, activeTab, currentWindowId) {
 
   const titleSpan = el.querySelector('.tabs-group-title');
   if (titleSpan) {
-    const titleText = group.title || 'Группа';
+    const titleText = group.title || t('group');
     if (titleSpan.textContent !== titleText) titleSpan.textContent = titleText;
     titleSpan.style.color = getGroupColorBorder(group.color);
   }
@@ -1234,7 +1370,7 @@ function createGroupMarkerElement(group, representativeTab, activeTab, currentWi
   if (isCollapsed) className += ' collapsed';
   el.className = className;
   el.dataset.groupId = group.id;
-  el.title = group.title || 'Группа вкладок';
+  el.title = group.title || t('groupTabs');
 
   el.style.borderLeftColor = getGroupColorBorder(group.color);
   el.style.backgroundColor = isCollapsed ? '' : getGroupColorBackground(group.color);
@@ -1245,7 +1381,7 @@ function createGroupMarkerElement(group, representativeTab, activeTab, currentWi
 
   const titleSpan = document.createElement('span');
   titleSpan.className = 'tabs-group-title';
-  titleSpan.textContent = group.title || 'Группа';
+  titleSpan.textContent = group.title || t('group');
   titleSpan.style.color = getGroupColorBorder(group.color);
 
   const countBadge = document.createElement('span');
@@ -1292,7 +1428,7 @@ function createTabElement(tab, activeTab, currentWindowId) {
   const isActive = activeTab && tab.id === activeTab.id;
   const isOtherWindow = currentWindowId && tab.windowId !== currentWindowId;
   const faviconUrl = getFaviconUrl(tab);
-  const tabTitle = tab.title || 'Без названия';
+  const tabTitle = tab.title || t('noTitle');
 
   // Создаем элементы через DOM API
   const tabItem = document.createElement('div');
@@ -1361,7 +1497,7 @@ function createTabElement(tab, activeTab, currentWindowId) {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'tabs-tab-action-btn';
-  closeBtn.title = 'Закрыть';
+  closeBtn.title = t('close');
   closeBtn.dataset.action = 'close';
   closeBtn.textContent = '✕';
 
@@ -1696,6 +1832,12 @@ if (chrome.storage && chrome.storage.onChanged) {
     if (searchChange && typeof searchChange.newValue === 'boolean') {
       searchVisible = searchChange.newValue;
       updatePanelDomVisibility();
+    }
+
+    const languageChange = changes[LANGUAGE_STORAGE_KEY];
+    if (languageChange && (languageChange.newValue === 'ru' || languageChange.newValue === 'en')) {
+      currentLanguage = languageChange.newValue;
+      applyLanguageUI({ rerenderTabs: true });
     }
 
     const peekTopChange = changes[COLLAPSED_PEEK_TOP_STORAGE_KEY];
