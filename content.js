@@ -87,7 +87,7 @@ const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
 let columnsCount = 6;
 const SPREAD_LAYOUT_STORAGE_KEY = 'tabsExtensionSpreadLayoutEnabled';
 let spreadLayoutEnabled = false;
-const SPREAD_LAYOUT_TITLE_MIN_CELL_WIDTH = 110;
+const SPREAD_LAYOUT_TITLE_MIN_CELL_WIDTH = 40;
 
 // Свёрнутые группы (Set<number> — groupId)
 const COLLAPSED_GROUPS_STORAGE_KEY = 'tabsExtensionCollapsedGroups';
@@ -395,7 +395,7 @@ function updateLayoutToggleButton() {
   const btn = shadowRoot.getElementById('tabs-panel-layout-toggle');
   if (!btn) return;
   btn.classList.toggle('active', spreadLayoutEnabled);
-  btn.textContent = spreadLayoutEnabled ? '↔ Равномерно' : '⇥ Слева';
+  btn.textContent = spreadLayoutEnabled ? '↔' : '↤';
   btn.title = spreadLayoutEnabled
     ? 'Выключить равномерную раскладку'
     : 'Включить равномерную раскладку';
@@ -465,7 +465,7 @@ function createTabsPanel() {
   panelContainer.className = 'tabs-panel-container';
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
-      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="Включить равномерную раскладку">⇥ Слева</button>
+      <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle" title="Включить равномерную раскладку">↤</button>
       <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="Включить мини-кнопку в свернутом режиме">📌</button>
       <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="Показать/скрыть поиск">🔍</button>
       <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▾▾</button>
