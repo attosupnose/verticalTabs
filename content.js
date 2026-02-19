@@ -87,6 +87,7 @@ const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
 let columnsCount = 6;
 const SPREAD_LAYOUT_STORAGE_KEY = 'tabsExtensionSpreadLayoutEnabled';
 let spreadLayoutEnabled = false;
+const SPREAD_LAYOUT_TITLE_MIN_CELL_WIDTH = 110;
 
 // Свёрнутые группы (Set<number> — groupId)
 const COLLAPSED_GROUPS_STORAGE_KEY = 'tabsExtensionCollapsedGroups';
@@ -292,6 +293,7 @@ function applyPanelWidth() {
   if (pageShiftApplied && document.body) {
     document.body.style.marginRight = `${panelWidth}px`;
   }
+  applyColumnsSetting();
 }
 
 // Загрузка свёрнутых групп из storage
@@ -370,14 +372,21 @@ function applyColumnsSetting() {
     content.style.gridTemplateColumns = '1fr';
     content.classList.add('single-column');
     content.classList.remove('spread-layout');
+    content.classList.remove('spread-with-titles');
   } else if (spreadLayoutEnabled) {
     content.style.gridTemplateColumns = `repeat(${safeColumns}, minmax(0, 1fr))`;
     content.classList.remove('single-column');
     content.classList.add('spread-layout');
+    const computed = window.getComputedStyle(content);
+    const gap = parseFloat(computed.columnGap || computed.gap || '0') || 0;
+    const availableWidth = content.clientWidth - gap * (safeColumns - 1);
+    const cellWidth = availableWidth / safeColumns;
+    content.classList.toggle('spread-with-titles', cellWidth >= SPREAD_LAYOUT_TITLE_MIN_CELL_WIDTH);
   } else {
     content.style.gridTemplateColumns = `repeat(${safeColumns}, 40px)`;
     content.classList.remove('single-column');
     content.classList.remove('spread-layout');
+    content.classList.remove('spread-with-titles');
   }
 }
 
