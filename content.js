@@ -121,6 +121,7 @@ const I18N = {
     noTitle: 'Без названия',
     group: 'Группа',
     groupTabs: 'Группа вкладок',
+    ungroupedTabs: 'Без группы',
     close: 'Закрыть',
     tabsNotFound: 'Вкладки не найдены',
     loadFailed: 'Не удалось загрузить вкладки',
@@ -145,6 +146,7 @@ const I18N = {
     noTitle: 'Untitled',
     group: 'Group',
     groupTabs: 'Tab group',
+    ungroupedTabs: 'Ungrouped',
     close: 'Close',
     tabsNotFound: 'No tabs found',
     loadFailed: 'Failed to load tabs',
@@ -1222,6 +1224,7 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
 
   const groupById = new Map(allTabGroups.map(g => [g.id, g]));
   const insertedGroupMarkers = new Set();
+  let previousRenderedSection = null; // 'grouped' | 'ungrouped'
 
   // 1. Собираем желаемый порядок элементов (ключ = "tab-<id>" или "group-<id>")
   //    Если группа свёрнута — её вкладки не включаются
@@ -1233,11 +1236,19 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
       const group = groupById.get(groupId);
       if (group) {
         desiredOrder.push({ key: `group-${groupId}`, type: 'group', group, representativeTab: tab });
+        previousRenderedSection = 'grouped';
       }
     }
     // Скрываем вкладки свёрнутых групп
-    if (groupId !== -1 && collapsedGroups.has(groupId)) return;
+    if (groupId !== -1 && collapsedGroups.has(groupId)) {
+      previousRenderedSection = 'grouped';
+      return;
+    }
+    if (groupId === -1 && previousRenderedSection === 'grouped') {
+      desiredOrder.push({ key: `ungrouped-${tab.id}`, type: 'separator', separatorId: tab.id });
+    }
     desiredOrder.push({ key: `tab-${tab.id}`, type: 'tab', tab });
+    previousRenderedSection = groupId === -1 ? 'ungrouped' : 'grouped';
   });
 
   // 2. Индексируем существующие DOM-элементы по ключу
@@ -1247,6 +1258,8 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
       existingByKey.set(`tab-${child.dataset.tabId}`, child);
     } else if (child.classList.contains('tabs-group-marker') && child.dataset.groupId) {
       existingByKey.set(`group-${child.dataset.groupId}`, child);
+    } else if (child.classList.contains('tabs-ungrouped-separator') && child.dataset.separatorId) {
+      existingByKey.set(`ungrouped-${child.dataset.separatorId}`, child);
     }
   }
 
@@ -1268,8 +1281,10 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
       // Элемент уже существует — обновляем только классы / data-атрибуты
       if (entry.type === 'tab') {
         updateTabElementInPlace(el, entry.tab, activeTab, currentWindowId);
-      } else {
+      } else if (entry.type === 'group') {
         updateGroupMarkerInPlace(el, entry.group, activeTab, currentWindowId);
+      } else {
+        updateUngroupedSeparatorInPlace(el);
       }
 
       // Если элемент не на своём месте в порядке — переставляем
@@ -1282,8 +1297,10 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
       // Элемента нет — создаём новый
       if (entry.type === 'tab') {
         el = createTabElement(entry.tab, activeTab, currentWindowId);
-      } else {
+      } else if (entry.type === 'group') {
         el = createGroupMarkerElement(entry.group, entry.representativeTab, activeTab, currentWindowId);
+      } else {
+        el = createUngroupedSeparatorElement(entry.separatorId);
       }
       container.insertBefore(el, cursor);
     }
@@ -1299,6 +1316,19 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
   // 6. Навешиваем обработчики только на новые элементы (без data-listeners)
   attachTabListeners();
   updateToggleAllButton();
+}
+
+function updateUngroupedSeparatorInPlace(el) {
+  if (!el) return;
+  el.textContent = t('ungroupedTabs');
+}
+
+function createUngroupedSeparatorElement(separatorId) {
+  const el = document.createElement('div');
+  el.className = 'tabs-ungrouped-separator';
+  el.dataset.separatorId = String(separatorId);
+  el.textContent = t('ungroupedTabs');
+  return el;
 }
 
 // Обновление существующего tab-элемента на месте (без пересоздания <img>)
