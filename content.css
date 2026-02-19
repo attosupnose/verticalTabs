@@ -327,6 +327,7 @@
 
 .tabs-panel-content.spread-layout {
   justify-content: stretch;
+  justify-items: start;
 }
 
 .tabs-panel-cols-input {
