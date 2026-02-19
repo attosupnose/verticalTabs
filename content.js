@@ -754,7 +754,7 @@ let draggedTabId = null;
 let suppressTabClickUntil = 0;
 
 // Управление автоскроллом к активной вкладке
-let suppressAutoScrollOnce = false;
+let suppressAutoScrollRenders = 0;
 let preservedScrollTop = 0;
 
 // Элемент тултипа внутри Shadow DOM
@@ -1052,9 +1052,9 @@ function renderTabs() {
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
     renderTabsList(content, filteredTabs, activeTab, currentWindowId);
 
-    if (suppressAutoScrollOnce) {
+    if (suppressAutoScrollRenders > 0) {
       // Восстанавливаем предыдущую позицию скролла (например, после закрытия вкладки)
-      suppressAutoScrollOnce = false;
+      suppressAutoScrollRenders -= 1;
       content.scrollTop = preservedScrollTop;
     } else {
       // Прокручиваем до активной вкладки после рендеринга
@@ -1064,8 +1064,8 @@ function renderTabs() {
     // Если не удалось получить активную вкладку, просто рендерим без выделения
     renderTabsList(content, filteredTabs, null, currentWindowId);
 
-    if (suppressAutoScrollOnce) {
-      suppressAutoScrollOnce = false;
+    if (suppressAutoScrollRenders > 0) {
+      suppressAutoScrollRenders -= 1;
       content.scrollTop = preservedScrollTop;
     }
   });
@@ -1425,7 +1425,9 @@ function attachTabListeners() {
         const content = shadowRoot?.getElementById('tabs-panel-content');
         if (content) {
           preservedScrollTop = content.scrollTop;
-          suppressAutoScrollOnce = true;
+          // Закрытие вкладки обычно вызывает несколько обновлений подряд.
+          // Подавляем автоскролл к активной вкладке на ближайшие 2 рендера.
+          suppressAutoScrollRenders = Math.max(suppressAutoScrollRenders, 2);
         }
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
           loadTabs();
@@ -1490,7 +1492,7 @@ function attachTabListeners() {
       const content = shadowRoot?.getElementById('tabs-panel-content');
       if (content) {
         preservedScrollTop = content.scrollTop;
-        suppressAutoScrollOnce = true;
+        suppressAutoScrollRenders = Math.max(suppressAutoScrollRenders, 2);
       }
       chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
         loadTabs();
@@ -1524,7 +1526,7 @@ function attachTabListeners() {
         const content = shadowRoot?.getElementById('tabs-panel-content');
         if (content) {
           preservedScrollTop = content.scrollTop;
-          suppressAutoScrollOnce = true;
+          suppressAutoScrollRenders = Math.max(suppressAutoScrollRenders, 2);
         }
 
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
@@ -1732,8 +1734,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!window.lastTabRefresh || now - window.lastTabRefresh > 500) {
         window.lastTabRefresh = now;
         loadTabs();
-        // Прокручиваем до активной вкладки после обновления
-        setTimeout(() => scrollToActiveTab(), 200);
       }
     }
   }
