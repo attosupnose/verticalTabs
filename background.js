@@ -111,6 +111,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'moveTabBefore') {
+    (async () => {
+      try {
+        const tab = await chrome.tabs.get(message.tabId);
+        const beforeTab = await chrome.tabs.get(message.beforeTabId);
+
+        let targetIndex = beforeTab.index;
+        if (tab.windowId === beforeTab.windowId && tab.index < beforeTab.index) {
+          targetIndex = Math.max(0, targetIndex - 1);
+        }
+
+        await chrome.tabs.move(tab.id, {
+          windowId: beforeTab.windowId,
+          index: targetIndex,
+        });
+
+        sendResponse({ success: true });
+      } catch (error) {
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === 'moveTabToGroup') {
+    (async () => {
+      try {
+        const tab = await chrome.tabs.get(message.tabId);
+        const group = await chrome.tabGroups.get(message.groupId);
+        const windowTabs = await chrome.tabs.query({ windowId: group.windowId });
+        const groupTabs = windowTabs
+          .filter(t => t.groupId === group.id)
+          .sort((a, b) => a.index - b.index);
+
+        const lastGroupIndex = groupTabs.length > 0
+          ? groupTabs[groupTabs.length - 1].index
+          : windowTabs.length;
+        let targetIndex = lastGroupIndex + 1;
+
+        if (tab.windowId === group.windowId && tab.index < targetIndex) {
+          targetIndex = Math.max(0, targetIndex - 1);
+        }
+
+        await chrome.tabs.move(tab.id, {
+          windowId: group.windowId,
+          index: targetIndex,
+        });
+
+        await chrome.tabs.group({
+          groupId: group.id,
+          tabIds: [tab.id],
+        });
+
+        sendResponse({ success: true });
+      } catch (error) {
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+    return true;
+  }
+
   if (message.action === 'panelVisibilityChanged') {
     if (sender && sender.tab && typeof sender.tab.windowId === 'number') {
       panelVisibilityByWindow[sender.tab.windowId] = !!message.visible;
@@ -170,6 +231,10 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   }).catch(() => {
     // Вкладка может не иметь content script — игнорируем ошибку
   });
+});
+
+chrome.tabs.onMoved.addListener(() => {
+  broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
 // Отправка сообщения во все вкладки

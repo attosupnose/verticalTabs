@@ -410,6 +410,15 @@
   transform: translateY(-1px);
 }
 
+.tabs-tab-item.is-dragging {
+  opacity: 0.55;
+}
+
+.tabs-tab-item.drag-over-tab {
+  outline: 2px dashed #1a73e8;
+  outline-offset: 2px;
+}
+
 .tabs-tab-item.active {
   background-color: #e8f0fe;
   border-color: #4285f4;
@@ -464,6 +473,11 @@
 
 .tabs-group-marker:hover {
   filter: brightness(0.95);
+}
+
+.tabs-group-marker.drag-over-group {
+  box-shadow: 0 0 0 2px #1a73e8 inset;
+  filter: brightness(0.92);
 }
 
 .tabs-group-marker.active {

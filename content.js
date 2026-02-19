@@ -750,6 +750,8 @@ let allTabs = [];
 let filteredTabs = [];
 let allTabGroups = [];
 let currentWindowId = null;
+let draggedTabId = null;
+let suppressTabClickUntil = 0;
 
 // Управление автоскроллом к активной вкладке
 let suppressAutoScrollOnce = false;
@@ -1173,6 +1175,7 @@ function updateTabElementInPlace(el, tab, activeTab, currentWindowId) {
 
   if (el.dataset.tabUrl !== (tab.url || '')) el.dataset.tabUrl = tab.url || '';
   if (el.dataset.windowId !== String(tab.windowId || '')) el.dataset.windowId = tab.windowId || '';
+  if (el.draggable !== true) el.draggable = true;
 }
 
 // Обновление существующего group-marker на месте
@@ -1293,6 +1296,7 @@ function createTabElement(tab, activeTab, currentWindowId) {
   tabItem.dataset.tabUrl = tab.url || '';
   tabItem.dataset.windowId = tab.windowId || '';
   tabItem.title = tabTitle;
+  tabItem.draggable = true;
 
   const faviconImg = document.createElement('img');
   faviconImg.className = 'tabs-tab-favicon';
@@ -1380,6 +1384,31 @@ function attachTabListeners() {
     marker.addEventListener('click', () => {
       toggleGroupCollapsed(groupId);
     });
+
+    marker.addEventListener('dragover', (e) => {
+      if (draggedTabId === null) return;
+      e.preventDefault();
+      marker.classList.add('drag-over-group');
+    });
+
+    marker.addEventListener('dragleave', () => {
+      marker.classList.remove('drag-over-group');
+    });
+
+    marker.addEventListener('drop', (e) => {
+      e.preventDefault();
+      marker.classList.remove('drag-over-group');
+      if (draggedTabId === null) return;
+      chrome.runtime.sendMessage({
+        action: 'moveTabToGroup',
+        tabId: draggedTabId,
+        groupId,
+      }).then(() => {
+        loadTabs();
+      }).catch((error) => {
+        console.error('[Tabs Extension] Error moving tab to group:', error);
+      });
+    });
   });
 
   const tabItems = shadowRoot.querySelectorAll('.tabs-tab-item:not([data-listeners])');
@@ -1390,6 +1419,7 @@ function attachTabListeners() {
     
     item.addEventListener('click', (e) => {
       if (e.target.closest('.tabs-tab-actions')) return;
+      if (Date.now() < suppressTabClickUntil) return;
 
       if (e.ctrlKey && e.shiftKey) {
         const content = shadowRoot?.getElementById('tabs-panel-content');
@@ -1409,6 +1439,48 @@ function attachTabListeners() {
         console.log('[Tabs Extension] Tab switch result:', result);
       }).catch((error) => {
         console.error('[Tabs Extension] Error switching tab:', error);
+      });
+    });
+
+    item.addEventListener('dragstart', (e) => {
+      draggedTabId = tabId;
+      item.classList.add('is-dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(tabId));
+      }
+    });
+
+    item.addEventListener('dragend', () => {
+      item.classList.remove('is-dragging');
+      draggedTabId = null;
+      suppressTabClickUntil = Date.now() + 200;
+      shadowRoot.querySelectorAll('.drag-over-tab').forEach(el => el.classList.remove('drag-over-tab'));
+      shadowRoot.querySelectorAll('.drag-over-group').forEach(el => el.classList.remove('drag-over-group'));
+    });
+
+    item.addEventListener('dragover', (e) => {
+      if (draggedTabId === null || draggedTabId === tabId) return;
+      e.preventDefault();
+      item.classList.add('drag-over-tab');
+    });
+
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('drag-over-tab');
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over-tab');
+      if (draggedTabId === null || draggedTabId === tabId) return;
+      chrome.runtime.sendMessage({
+        action: 'moveTabBefore',
+        tabId: draggedTabId,
+        beforeTabId: tabId,
+      }).then(() => {
+        loadTabs();
+      }).catch((error) => {
+        console.error('[Tabs Extension] Error moving tab:', error);
       });
     });
 
