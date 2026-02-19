@@ -42,10 +42,7 @@ function updatePanelDomVisibility({ skipAnimation = false } = {}) {
   if (panelVisible) {
     applyPageShift();
     // После раскрытия панели пересчитываем адаптивную раскладку по фактической ширине.
-    requestAnimationFrame(() => {
-      applyColumnsSetting();
-      requestAnimationFrame(() => applyColumnsSetting());
-    });
+    recalculateColumnsLayoutSoon();
     // Прокручиваем до активной вкладки при открытии панели
     setTimeout(() => scrollToActiveTab(), 300);
   } else {
@@ -393,6 +390,15 @@ function applyColumnsSetting() {
     content.classList.remove('spread-layout');
     content.classList.remove('spread-with-titles');
   }
+}
+
+function recalculateColumnsLayoutSoon() {
+  // Несколько проходов, чтобы поймать фактическую ширину после первого раскрытия.
+  requestAnimationFrame(() => {
+    applyColumnsSetting();
+    requestAnimationFrame(() => applyColumnsSetting());
+  });
+  setTimeout(() => applyColumnsSetting(), 120);
 }
 
 function updateLayoutToggleButton() {
@@ -1051,6 +1057,7 @@ function renderTabs() {
 
   chrome.runtime.sendMessage({ action: 'getActiveTab' }).then(([activeTab]) => {
     renderTabsList(content, filteredTabs, activeTab, currentWindowId);
+    recalculateColumnsLayoutSoon();
 
     if (suppressAutoScrollRenders > 0) {
       // Восстанавливаем предыдущую позицию скролла (например, после закрытия вкладки)
@@ -1063,6 +1070,7 @@ function renderTabs() {
   }).catch(() => {
     // Если не удалось получить активную вкладку, просто рендерим без выделения
     renderTabsList(content, filteredTabs, null, currentWindowId);
+    recalculateColumnsLayoutSoon();
 
     if (suppressAutoScrollRenders > 0) {
       suppressAutoScrollRenders -= 1;
