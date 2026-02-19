@@ -22,7 +22,8 @@ function updatePanelDomVisibility({ skipAnimation = false } = {}) {
   panel.classList.toggle('launcher-hidden', !panelVisible && !collapsedLauncherEnabled);
 
   if (toggleBtn) {
-    toggleBtn.textContent = panelVisible ? '◀' : '▶';
+    toggleBtn.textContent = panelVisible ? '❮' : '❯';
+    toggleBtn.title = panelVisible ? 'Свернуть панель' : 'Развернуть панель';
   }
   if (launcherToggleBtn) {
     launcherToggleBtn.classList.toggle('active', collapsedLauncherEnabled);
@@ -301,7 +302,8 @@ function updateToggleAllButton() {
   const allGroupIds = allTabGroups.map(g => g.id);
   const hasGroups = allGroupIds.length > 0;
   const allCollapsed = hasGroups && allGroupIds.every(id => collapsedGroups.has(id));
-  btn.textContent = allCollapsed ? '▶' : '▼';
+  btn.textContent = allCollapsed ? '▸▸' : '▾▾';
+  btn.title = allCollapsed ? 'Развернуть все группы' : 'Свернуть все группы';
   btn.style.display = hasGroups ? '' : 'none';
 }
 
@@ -371,9 +373,9 @@ function createTabsPanel() {
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
       <h2>Все вкладки</h2>
-      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="Включить мини-кнопку в свернутом режиме">◱</button>
-      <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="Показать/скрыть поиск">⌕</button>
-      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▼</button>
+      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn" title="Включить мини-кнопку в свернутом режиме">📌</button>
+      <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn" title="Показать/скрыть поиск">🔍</button>
+      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all" title="Свернуть/развернуть все группы" style="display:none">▾▾</button>
       <input
         type="number"
         id="tabs-panel-cols-input"
@@ -384,11 +386,11 @@ function createTabsPanel() {
         title="Количество столбцов с иконками"
         aria-label="Количество столбцов с иконками"
       >
-      <button id="tabs-panel-toggle" class="tabs-panel-toggle">◀</button>
+      <button id="tabs-panel-toggle" class="tabs-panel-toggle" title="Свернуть панель">❮</button>
       <button id="tabs-panel-refresh" class="tabs-panel-refresh" title="Обновить">🔄</button>
     </div>
     <div id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek">
-      <button id="tabs-panel-peek-expand" class="tabs-panel-peek-expand" title="Развернуть панель" aria-label="Развернуть панель">◀</button>
+      <button id="tabs-panel-peek-expand" class="tabs-panel-peek-expand" title="Развернуть панель" aria-label="Развернуть панель">❯</button>
       <button id="tabs-panel-peek-close" class="tabs-panel-peek-close" title="Скрыть мини-кнопку" aria-label="Скрыть мини-кнопку">✕</button>
     </div>
     <div class="tabs-panel-search">
