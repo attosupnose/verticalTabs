@@ -1,38 +1,43 @@
-# Chrome Extension Project
+# Vertical Tabs: compact, float
 
-Расширение для Google Chrome.
+A Google Chrome extension for managing many open tabs with a compact, resizable vertical panel.
 
-## Структура проекта
+## Project Structure
 
 ```
-WebExtensions/
-├── manifest.json      # Манифест расширения
-├── popup.html         # HTML для popup окна
-├── popup.css          # Стили для popup
-├── popup.js           # JavaScript для popup
-├── icons/             # Иконки расширения
-└── README.md          # Этот файл
+VerticalTabs/
+├── manifest.json      # Extension manifest
+├── content.js         # Main in-page tabs panel logic
+├── content.css        # Tabs panel styles
+├── background.js      # Background/service worker logic
+├── popup.html         # Popup UI
+├── popup.css          # Popup styles
+├── popup.js           # Popup behavior
+├── icons/             # Extension icons
+└── README.md          # This file
 ```
 
-## Установка
+## Installation
 
-1. Откройте Chrome и перейдите в `chrome://extensions/`
-2. Включите "Режим разработчика" (Developer mode)
-3. Нажмите "Загрузить распакованное расширение" (Load unpacked)
-4. Выберите папку с проектом
+1. Open Chrome and go to `chrome://extensions/`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select the project folder
 
-## Разработка
+## Development Notes
 
-- `manifest.json` - основной файл конфигурации расширения
-- `popup.html/js/css` - файлы для popup окна расширения
+- `manifest.json` - main extension configuration
+- `content.js` / `content.css` - in-page vertical tabs panel
+- `background.js` - tab/group operations and messaging
+- `popup.html/js/css` - popup UI files
 
-## Иконки
+## Icons
 
-Поместите иконки расширения в папку `icons/`:
-- `icon16.png` - 16x16 пикселей
-- `icon48.png` - 48x48 пикселей
-- `icon128.png` - 128x128 пикселей
+Place extension icons in the `icons/` folder:
+- `icon16.png` - 16x16 pixels
+- `icon48.png` - 48x48 pixels
+- `icon128.png` - 128x128 pixels
 
-## Лицензия
+## License
 
 MIT
