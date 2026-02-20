@@ -30,6 +30,11 @@
   background-color: transparent !important;
   border-left: none !important;
   box-shadow: none !important;
+  pointer-events: none !important;
+}
+
+:host(.collapsed) .tabs-panel-collapsed-peek {
+  pointer-events: auto;
 }
 
 :host(.collapsed.launcher-hidden) {
