@@ -995,7 +995,7 @@ function getFaviconUrl(tab) {
         const faviconUrls = getFaviconUrlsFromTabUrl(tab.url);
         if (faviconUrls.length > 0) {
           // Используем Google Favicon Service как первый вариант
-          resultUrl = faviconUrls[1] || faviconUrls[0]; // faviconUrls[1] это Google Favicon Service
+          resultUrl = faviconUrls.find(u => u.includes('google.com/s2/favicons')) || faviconUrls[0];
           console.log('[Tabs Extension] getFaviconUrl: using URL-derived favicon for tab', tabId, resultUrl);
         } else {
           resultUrl = getFallbackIcon();
@@ -1023,6 +1023,23 @@ function getFaviconUrl(tab) {
 }
 
 // Различные способы получения favicon URL
+function isLocalNetworkHost(hostname) {
+  if (!hostname) return false;
+  const host = hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.local')) return true;
+  if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return true;
+  if (/^127\./.test(host)) return true;
+  if (/^10\./.test(host)) return true;
+  if (/^192\.168\./.test(host)) return true;
+  if (/^169\.254\./.test(host)) return true;
+  const m = host.match(/^172\.(\d{1,3})\./);
+  if (m) {
+    const second = Number(m[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return false;
+}
+
 function getFaviconUrlsFromTabUrl(tabUrl) {
   if (!tabUrl) return [];
   
@@ -1034,21 +1051,19 @@ function getFaviconUrlsFromTabUrl(tabUrl) {
       return [];
     }
     
+    // Важно: не делаем прямые запросы к private/local хостам, чтобы не триггерить
+    // системные запросы доступа к локальной сети в Chrome.
+    if (isLocalNetworkHost(url.hostname)) {
+      return [];
+    }
+
     const urls = [];
-    const baseUrl = `${url.protocol}//${url.hostname}`;
-    
-    // 1. Стандартный favicon.ico на корне домена
-    urls.push(`${baseUrl}/favicon.ico`);
-    
-    // 2. Google Favicon Service (работает для большинства сайтов)
+
+    // 1. Google Favicon Service (работает для большинства сайтов)
     urls.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`);
     
-    // 3. DuckDuckGo Favicon Service (альтернатива)
+    // 2. DuckDuckGo Favicon Service (альтернатива)
     urls.push(`https://icons.duckduckgo.com/ip3/${encodeURIComponent(url.hostname)}.ico`);
-    
-    // 4. Favicon через домен с размером (некоторые сайты поддерживают)
-    urls.push(`${baseUrl}/favicon-32x32.png`);
-    urls.push(`${baseUrl}/apple-touch-icon.png`);
     
     return urls;
   } catch (e) {
