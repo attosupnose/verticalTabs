@@ -1,81 +1,42 @@
 # Chrome Web Store Listing Text
 
-## RU — Short Description
+## Short Description
 
-Удобная панель всех вкладок: быстрый поиск, группировка, перетаскивание и управление вкладками прямо на странице.
+Manage all open tabs in a compact vertical panel with fast search, tab groups, drag-and-drop, and quick actions.
 
-## RU — Detailed Description
+## Detailed Description
 
-"Вертикальные вкладки: компактные, растяжимые" — расширение для удобного управления большим количеством открытых вкладок в Chrome.
+Vertical Tabs: compact, float helps you manage many open tabs in Chrome with a compact, resizable vertical panel.
 
-### Основные возможности
+### Key Features
 
-- Панель вкладок прямо на странице (сворачиваемая и изменяемая по ширине)
-- Быстрый поиск по названию и URL вкладок
-- Работа с группами вкладок:
-  - сворачивание/разворачивание групп
-  - сворачивание/разворачивание всех групп одной кнопкой
-- Drag & Drop:
-  - перетаскивание вкладок для изменения порядка
-  - перенос вкладок в группы
-- Быстрое закрытие вкладок:
-  - через кнопку закрытия
-  - средней кнопкой мыши
-  - Ctrl+Shift+клик
-- Настраиваемая раскладка иконок (в том числе равномерная по ширине панели)
-- RU/EN переключение языка интерфейса
-- Синхронизация пользовательских настроек через Chrome storage
-
-### Зачем нужны разрешения
-
-- `tabs` — показывать и управлять вкладками
-- `tabGroups` — показывать и управлять группами вкладок
-- `storage` — сохранять настройки интерфейса
-- `scripting`, `activeTab` — корректно запускать UI панели на текущей странице
-- Host access (`<all_urls>`) — чтобы панель работала на сайтах, где пользователь хочет управлять вкладками
-
-### Privacy
-
-Расширение не продает и не передает персональные данные для рекламы.  
-Детали: укажите ссылку на опубликованную политику приватности (файл-источник: `PRIVACY_POLICY.md`).
-
----
-
-## EN — Short Description
-
-A powerful all-tabs side panel for Chrome: fast search, groups, drag-and-drop, and quick tab management on any page.
-
-## EN — Detailed Description
-
-"Vertical Tabs: compact, float" helps you manage many open tabs in Chrome with a compact, flexible panel.
-
-### Key features
-
-- In-page tabs panel (collapsible and resizable)
+- In-page vertical tabs panel (collapsible and resizable)
 - Fast search by tab title and URL
 - Tab group management:
-  - collapse/expand individual groups
-  - collapse/expand all groups with one click
-- Drag & Drop:
+  - collapse/expand groups
+  - toggle all groups
+- Drag and drop:
   - reorder tabs by dragging
-  - drop tabs into groups
-- Quick close options:
+  - move tabs into groups
+- Quick close actions:
   - close button
   - middle-click
   - Ctrl+Shift+click
-- Adjustable icon layout (including evenly distributed layout)
-- RU/EN UI language toggle
+- Adjustable icon layout
 - Settings sync via Chrome storage
 
-### Why permissions are needed
+### Why Permissions Are Needed
 
-- `tabs` — display and manage open tabs
-- `tabGroups` — display and manage tab groups
-- `storage` — save UI preferences
-- `scripting`, `activeTab` — initialize the panel UI on the current page
-- Host access (`<all_urls>`) — enable panel functionality on pages where users use the extension
+- `tabs` - display and manage open tabs
+- `tabGroups` - display and manage tab groups
+- `storage` - save UI preferences
+- `scripting`, `activeTab` - initialize and display the panel UI on the active page
+- Host access (`<all_urls>`) - allow the panel to work on pages where users manage tabs
+
+### Host Permission Justification
+
+This extension has a single purpose: tab management. Host access is used only to inject and run local panel UI code on user-visited pages, so users can view, search, group, reorder, activate, and close tabs in context. The extension does not execute remote code and does not use page access for advertising or profiling.
 
 ### Privacy
 
-The extension does not sell personal data and does not share personal data for advertising.  
-Use your public privacy policy URL in the store listing (source file: `PRIVACY_POLICY.md`).
+The extension processes tab metadata (such as title and URL) locally to provide core tab-management functionality. It does not sell personal data and does not transfer personal data for advertising. Add your public privacy policy URL in the Chrome Web Store listing.
