@@ -1,80 +1,76 @@
-# Методы загрузки Favicon в расширении
+# Favicon Loading Methods
 
-## Текущая реализация
+## Current Implementation
 
-Расширение использует несколько методов загрузки favicon с приоритетами:
+The extension uses multiple favicon loading methods with priority order.
 
-### Метод 1: Chrome Tabs API (через background script)
-**Как работает:**
-- Использует `chrome.tabs.get(tabId)` для получения `favIconUrl`
-- Работает для активных и неактивных вкладок
-- Самый надежный метод, так как Chrome уже загрузил favicon
+### Method 1: Chrome Tabs API (via background script)
+**How it works:**
+- Uses `chrome.tabs.get(tabId)` to read `favIconUrl`
+- Works for active and inactive tabs
+- Most reliable when Chrome already has favicon data
 
-**Плюсы:**
-- ✅ Работает для всех вкладок
-- ✅ Использует уже загруженный Chrome favicon
-- ✅ Не требует дополнительных запросов
+**Pros:**
+- Works for all tabs
+- Uses favicon data already available in Chrome
+- No extra network parsing
 
-**Минусы:**
-- ❌ Для неактивных вкладок `favIconUrl` может быть пустым
-- ❌ Требует обмена сообщениями между content script и background script
+**Cons:**
+- `favIconUrl` can be empty for some inactive tabs
+- Requires messaging between content script and background script
 
-### Метод 2: Прямая загрузка по URL сайта
-**Как работает:**
-- Генерирует список возможных URL favicon на основе URL вкладки
-- Пробует загрузить каждый URL по очереди
+### Method 2: Direct loading by site URL
+**How it works:**
+- Builds potential favicon URLs from tab URL
+- Tries URLs in sequence
 
-**Варианты URL:**
-1. `/favicon.ico` - стандартный путь на большинстве сайтов
-2. Google Favicon Service - `https://www.google.com/s2/favicons?domain=...`
-3. DuckDuckGo Favicon Service - `https://icons.duckduckgo.com/ip3/...`
-4. `/favicon-32x32.png` - некоторые современные сайты
-5. `/apple-touch-icon.png` - iOS иконка (часто используется)
+**URL options used:**
+1. Google Favicon Service: `https://www.google.com/s2/favicons?domain=...`
+2. DuckDuckGo Favicon Service: `https://icons.duckduckgo.com/ip3/...`
 
-**Плюсы:**
-- ✅ Работает даже если Chrome не загрузил favicon
-- ✅ Несколько fallback вариантов
-- ✅ Google Favicon Service работает для большинства сайтов
+**Pros:**
+- Works even when `favIconUrl` is missing
+- Provides fallback options
+- Google service works for many websites
 
-**Минусы:**
-- ❌ Может быть медленнее (нужно делать запросы)
-- ❌ Могут быть проблемы с CORS на некоторых сайтах
-- ❌ Google Favicon Service может быть заблокирован
+**Cons:**
+- Can be slower due to additional requests
+- Some domains can fail due to availability/CORS-related behavior
 
-## Приоритет загрузки
+## Loading Priority
 
-1. **favIconUrl из объекта tab** (если есть)
-2. **Google Favicon Service** (как начальный источник)
-3. **Асинхронная загрузка через background script** (если favIconUrl пустой)
-4. **Прямая загрузка по URL** (если background script не помог)
-5. **Fallback иконка** (если все методы не сработали)
+1. `favIconUrl` from tab object (if present)
+2. Google Favicon Service (initial source)
+3. Async load via background script (if `favIconUrl` is empty)
+4. Direct load by URL (if background script did not help)
+5. Fallback icon (if all methods fail)
 
-## Альтернативные методы (не реализованы)
+## Alternative Methods (Not Implemented)
 
-### Метод 3: Парсинг HTML страницы
-Можно было бы парсить HTML страницы для поиска `<link rel="icon">` тегов, но:
-- Требует загрузки всей страницы
-- Медленно для многих вкладок
-- Может быть заблокировано CORS
+### Method 3: Parse page HTML
+Could parse page HTML for `<link rel="icon">`, but:
+- Requires reading page content
+- Slower with many tabs
+- Not ideal for this architecture
 
-### Метод 4: chrome://favicon/
-Протокол Chrome для получения favicon, но:
-- ❌ Не работает в content scripts
-- ❌ Работает только в popup/side panel
+### Method 4: `chrome://favicon/`
+Chrome protocol for favicon access, but:
+- Not suitable for content script usage
+- More limited for this extension flow
 
-### Метод 5: Использование других сервисов
-- **Favicon.io** - но требует API ключ
-- **Icon Horse** - публичный API, но может быть медленным
-- **Favicon Grabber** - требует парсинг страницы
+### Method 5: Other external services
+- **Favicon.io** (API-based)
+- **Icon Horse** (public API)
+- **Favicon Grabber** (page parsing approach)
 
-## Рекомендации
+## Recommendations
 
-Текущая реализация использует оптимальный баланс:
-- Быстрая загрузка через Google Favicon Service
-- Fallback через background script для надежности
-- Множественные варианты URL для максимального покрытия
+The current approach is a practical balance:
+- Fast initial load through Google Favicon Service
+- Reliable fallback through background-script flow
+- Multiple URL options for broader coverage
 
-Если нужно улучшить загрузку:
-1. Можно добавить кэширование favicon URL
-2. Можно использовать Service Worker для предзагрузки
-3. Можно добавить retry логику с экспоненциальной задержкой
+Possible future improvements:
+1. Better favicon URL caching strategy
+2. Preload strategy in service worker
+3. Retry strategy with exponential backoff

@@ -1,4 +1,4 @@
-# Privacy Policy for "Vertical Tabs: compact, float" / "Вертикальные вкладки: компактные, растяжимые"
+# Privacy Policy for "Vertical Tabs: compact, float"
 
 Last updated: 2026-02-20
 

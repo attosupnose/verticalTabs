@@ -1,87 +1,87 @@
-# Отладка расширения "Vertical Tabs: compact, float" ("Вертикальные вкладки: компактные, растяжимые")
+# Debug Guide for "Vertical Tabs: compact, float"
 
-## Как открыть DevTools для отладки
+## Open DevTools for Debugging
 
-### 1. Открыть DevTools для Content Script
+### 1. Content Script DevTools
 
-1. Откройте любую веб-страницу
-2. Откройте DevTools (F12 или Ctrl+Shift+I)
-3. Перейдите на вкладку **Console**
-4. Все логи с префиксом `[Tabs Extension]` будут видны здесь
+1. Open any web page
+2. Open DevTools (`F12` or `Ctrl+Shift+I`)
+3. Go to the **Console** tab
+4. Logs with prefix `[Tabs Extension]` are shown there
 
-### 2. Открыть DevTools для Background Script
+### 2. Background Script DevTools
 
-1. Откройте `chrome://extensions/`
-2. Найдите расширение "Vertical Tabs: compact, float"
-3. Нажмите на ссылку **"service worker"** (или "background page" для MV2)
-4. Откроется DevTools для background script
+1. Open `chrome://extensions/`
+2. Find the extension "Vertical Tabs: compact, float"
+3. Click **service worker** (or background page for MV2)
+4. DevTools for the background script will open
 
-### 3. Проверить Shadow DOM
+### 3. Inspect Shadow DOM
 
-1. Откройте DevTools на странице
-2. Перейдите на вкладку **Elements**
-3. Найдите элемент `#tabs-extension-panel`
-4. Раскройте его - внутри будет `#shadow-root (closed)`
-5. Раскройте shadow root, чтобы увидеть внутреннюю структуру
+1. Open DevTools on a page
+2. Go to **Elements**
+3. Find `#tabs-extension-panel`
+4. Expand it to see `#shadow-root (closed)`
+5. Expand the shadow root to inspect internal structure
 
-## Что логируется
+## What Gets Logged
 
-### Загрузка вкладок
-- `[Tabs Extension] Loading tabs...` - начало загрузки
-- `[Tabs Extension] Loaded X tabs` - количество загруженных вкладок
-- `[Tabs Extension] Tabs with favIconUrl: X` - сколько вкладок имеют favIconUrl
+### Tab Loading
+- `[Tabs Extension] Loading tabs...` - loading started
+- `[Tabs Extension] Loaded X tabs` - number of loaded tabs
+- `[Tabs Extension] Tabs with favIconUrl: X` - tabs that contain `favIconUrl`
 
-### Загрузка иконок
-- `[Tabs Extension] Using favIconUrl for tab X` - используется favIconUrl из объекта tab
-- `[Tabs Extension] No favIconUrl for tab X, will try async load` - нет favIconUrl, будет попытка асинхронной загрузки
-- `[Tabs Extension] Attempting to load favicon for tab X` - начало асинхронной загрузки
-- `[Tabs Extension] Favicon result for tab X` - результат запроса favicon
-- `[Tabs Extension] Setting favicon for tab X to URL` - установка favicon
-- `[Tabs Extension] Favicon loaded successfully for tab X` - успешная загрузка
-- `[Tabs Extension] Favicon load error for tab X` - ошибка загрузки
+### Favicon Loading
+- `[Tabs Extension] Using favIconUrl for tab X` - using `favIconUrl` from tab object
+- `[Tabs Extension] No favIconUrl for tab X, will try async load` - fallback to async load
+- `[Tabs Extension] Attempting to load favicon for tab X` - async load started
+- `[Tabs Extension] Favicon result for tab X` - favicon request result
+- `[Tabs Extension] Setting favicon for tab X to URL` - favicon URL set
+- `[Tabs Extension] Favicon loaded successfully for tab X` - load success
+- `[Tabs Extension] Favicon load error for tab X` - load error
 
-### Клики по вкладкам
-- `[Tabs Extension] Tab item clicked: X` - клик по вкладке
-- `[Tabs Extension] Switching to tab X` - переключение на вкладку
-- `[Tabs Extension] Tab switch result: X` - результат переключения
-- `[Tabs Extension] Action button clicked: close for tab X` - клик по кнопке закрытия
-- `[Tabs Extension] Closing tab X` - закрытие вкладки
+### Tab Clicks
+- `[Tabs Extension] Tab item clicked: X` - tab click
+- `[Tabs Extension] Switching to tab X` - tab activation
+- `[Tabs Extension] Tab switch result: X` - activation result
+- `[Tabs Extension] Action button clicked: close for tab X` - close button click
+- `[Tabs Extension] Closing tab X` - tab closing
 
-### Ошибки
-- Все ошибки логируются с префиксом `[Tabs Extension] Error:`
+### Errors
+- All errors are logged with prefix `[Tabs Extension] Error:`
 
-## Полезные команды в Console
+## Useful Console Commands
 
 ```javascript
-// Проверить текущее состояние
+// Check current state
 console.log('All tabs:', allTabs);
 console.log('Filtered tabs:', filteredTabs);
 console.log('Current window ID:', currentWindowId);
 console.log('Panel visible:', panelVisible);
 
-// Проверить Shadow DOM
+// Check Shadow DOM
 const panel = document.getElementById('tabs-extension-panel');
 const shadowRoot = panel?.shadowRoot;
 console.log('Shadow root:', shadowRoot);
 
-// Проверить элементы в Shadow DOM
+// Check elements in Shadow DOM
 const tabItems = shadowRoot?.querySelectorAll('.tabs-tab-item');
 console.log('Tab items:', tabItems);
 
-// Проверить favicon для конкретной вкладки
+// Check favicon for a specific tab
 chrome.runtime.sendMessage({ action: 'getTabFavicon', tabId: 123 }).then(console.log);
 ```
 
-## Проверка загрузки иконок
+## Verify Favicon Loading
 
-1. Откройте Console в DevTools
-2. Найдите логи с `[Tabs Extension] Favicon`
-3. Проверьте, какие вкладки имеют `favIconUrl`
-4. Проверьте ошибки загрузки изображений
+1. Open Console in DevTools
+2. Filter logs with `[Tabs Extension] Favicon`
+3. Check which tabs include `favIconUrl`
+4. Check image loading errors
 
-## Проверка кликов
+## Verify Click Handling
 
-1. Откройте Console в DevTools
-2. Кликните на вкладку в панели
-3. Проверьте логи `[Tabs Extension] Tab item clicked`
-4. Проверьте результат переключения
+1. Open Console in DevTools
+2. Click a tab in the panel
+3. Verify `[Tabs Extension] Tab item clicked` logs
+4. Verify tab switch result logs
