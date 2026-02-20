@@ -1,7 +1,7 @@
-/* Content script стили для панели вкладок внизу страницы */
-/* Изолированы через Shadow DOM */
+/* Content script styles for tabs panel at the bottom of the page */
+/* Isolated via Shadow DOM */
 
-/* CSS Reset для изоляции от стилей сайта (только внутри панели) */
+/* CSS Reset for isolation from site styles (only inside panel) */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -555,7 +555,7 @@
   flex: 1;
 }
 
-/* Счётчик вкладок внутри маркера группы */
+/* Tab counter inside group marker */
 .tabs-group-count {
   font-size: 10px;
   font-weight: 700;
@@ -643,7 +643,7 @@
   font-size: 11px;
 }
 
-/* Fallback для отсутствующих иконок */
+/* Fallback for missing icons */
 .tabs-tab-item:has(.tabs-tab-favicon[src*="data:image"]) {
   background-color: #e8eaed;
 }
@@ -708,7 +708,7 @@
   font-size: 13px;
 }
 
-/* Tooltip для показа названия вкладки */
+/* Tooltip for showing tab title */
 .tabs-tooltip {
   position: fixed;
   z-index: 2147483648;

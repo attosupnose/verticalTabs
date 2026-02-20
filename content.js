@@ -1,4 +1,4 @@
-// Content script для отображения панели вкладок внизу страницы
+// Content script for displaying tabs panel at the bottom of the page
 
 let panelVisible = false;
 let tabsPanel = null;
@@ -38,12 +38,12 @@ function updatePanelDomVisibility({ skipAnimation = false } = {}) {
     searchContainer.classList.toggle('visible', searchVisible);
   }
 
-  // При открытии панели сдвигаем страницу, при закрытии — возвращаем назад
+  // When opening panel, shift the page; when closing, restore it
   if (panelVisible) {
     applyPageShift();
-    // После раскрытия панели пересчитываем адаптивную раскладку по фактической ширине.
+    // After expanding panel, recalculate adaptive layout by actual width.
     recalculateColumnsLayoutSoon();
-    // Прокручиваем до активной вкладки при открытии панели
+    // Scroll to active tab when opening panel
     setTimeout(() => scrollToActiveTab(), 300);
   } else {
     removePageShift();
@@ -70,12 +70,12 @@ function setPanelVisibility(visible, { notifyBackground = false, skipAnimation =
       action: 'panelVisibilityChanged',
       visible: panelVisible,
     }).catch(() => {
-      // Игнорируем ошибки, если background недоступен
+      // Ignore errors if background is unavailable
     });
   }
 }
 
-// Параметры сдвига страницы при открытии панели
+// Page shift parameters when opening panel
 const PANEL_WIDTH_STORAGE_KEY = 'tabsExtensionPanelWidth';
 const MIN_PANEL_WIDTH = 150;
 const MAX_PANEL_WIDTH = 800;
@@ -84,14 +84,14 @@ let pageShiftApplied = false;
 let originalBodyMarginRight = '';
 let originalBodyTransition = '';
 
-// Настройки количества столбцов с иконками вкладок
+// Settings for number of columns with tab icons
 const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
 let columnsCount = 6;
 const SPREAD_LAYOUT_STORAGE_KEY = 'tabsExtensionSpreadLayoutEnabled';
 let spreadLayoutEnabled = false;
 const SPREAD_LAYOUT_TITLE_MIN_CELL_WIDTH = 40;
 
-// Свёрнутые группы (Set<number> — groupId)
+// Collapsed groups (Set<number> - groupId)
 const COLLAPSED_GROUPS_STORAGE_KEY = 'tabsExtensionCollapsedGroups';
 let collapsedGroups = new Set();
 const COLLAPSED_LAUNCHER_STORAGE_KEY = 'tabsExtensionCollapsedLauncherEnabled';
@@ -103,31 +103,6 @@ let collapsedPeekTop = 8;
 const LANGUAGE_STORAGE_KEY = 'tabsExtensionLanguage';
 let currentLanguage = 'en';
 const I18N = {
-  ru: {
-    collapsePanel: 'Свернуть панель',
-    expandPanel: 'Развернуть панель',
-    launcherEnabled: 'Мини-кнопка включена',
-    launcherDisabled: 'Включить мини-кнопку в свернутом режиме',
-    layoutOn: 'Выключить равномерную раскладку',
-    layoutOff: 'Включить равномерную раскладку',
-    expandAllGroups: 'Развернуть все группы',
-    collapseAllGroups: 'Свернуть все группы',
-    searchToggle: 'Показать/скрыть поиск',
-    refresh: 'Обновить',
-    searchPlaceholder: 'Поиск вкладок...',
-    expandPanelLabel: 'Развернуть панель',
-    hideMiniButtonLabel: 'Скрыть мини-кнопку',
-    dragMiniButton: 'Переместить мини-кнопку',
-    noTitle: 'Без названия',
-    group: 'Группа',
-    groupTabs: 'Группа вкладок',
-    ungroupedTabs: 'Без группы',
-    close: 'Закрыть',
-    tabsNotFound: 'Вкладки не найдены',
-    loadFailed: 'Не удалось загрузить вкладки',
-    languageTitle: 'Переключить язык (RU/EN)',
-    columnsCountLabel: 'Количество столбцов с иконками',
-  },
   en: {
     collapsePanel: 'Collapse panel',
     expandPanel: 'Expand panel',
@@ -156,10 +131,10 @@ const I18N = {
 };
 
 function t(key) {
-  return I18N[currentLanguage]?.[key] || I18N.ru[key] || key;
+  return I18N[currentLanguage]?.[key] || I18N.en[key] || key;
 }
 
-// Кэш favicon по id вкладки (в рамках одной страницы)
+// Favicon cache by tab id (within one page)
 const faviconCache = new Map();
 
 function applyPageShift() {
@@ -171,7 +146,7 @@ function applyPageShift() {
     originalBodyTransition = body.style.transition;
   }
 
-  // Добавляем/расширяем transition так, чтобы margin-right анимировался
+  // Add/extend transition so margin-right is animated
   const currentTransition = body.style.transition || '';
   if (!currentTransition.includes('margin-right')) {
     body.style.transition = currentTransition
@@ -192,12 +167,12 @@ function removePageShift() {
   pageShiftApplied = false;
 }
 
-// Загрузка CSS в Shadow DOM
+// Load CSS in Shadow DOM
 function loadPanelCSS() {
   return chrome.runtime.getURL('content.css');
 }
 
-// Загрузка сохранённого количества столбцов
+// Load saved column count
 function loadStoredColumnsCount() {
   return new Promise((resolve) => {
     try {
@@ -220,13 +195,13 @@ function loadStoredColumnsCount() {
   });
 }
 
-// Сохранение количества столбцов
+// Save column count
 function storeColumnsCount(value) {
   try {
     if (!chrome.storage || !chrome.storage.sync) return;
     chrome.storage.sync.set({ [COLUMNS_STORAGE_KEY]: value });
   } catch (e) {
-    // Молча игнорируем ошибки хранения
+    // Silently ignore storage errors
   }
 }
 
@@ -305,7 +280,7 @@ function loadStoredLanguage() {
       if (!chrome.storage || !chrome.storage.sync) { resolve(null); return; }
       chrome.storage.sync.get([LANGUAGE_STORAGE_KEY], (result) => {
         const value = result?.[LANGUAGE_STORAGE_KEY];
-        if (value === 'ru' || value === 'en') {
+        if (value === 'en') {
           resolve(value);
         } else {
           resolve(null);
@@ -318,7 +293,7 @@ function loadStoredLanguage() {
 function storeLanguage(lang) {
   try {
     if (!chrome.storage || !chrome.storage.sync) return;
-    if (lang !== 'ru' && lang !== 'en') return;
+    if (lang !== 'en') return;
     chrome.storage.sync.set({ [LANGUAGE_STORAGE_KEY]: lang });
   } catch (e) { /* ignore */ }
 }
@@ -346,7 +321,7 @@ function storeCollapsedPeekTop(value) {
   } catch (e) { /* ignore */ }
 }
 
-// Ширина панели — storage + применение
+// Panel width - storage + application
 function loadStoredPanelWidth() {
   return new Promise((resolve) => {
     try {
@@ -380,7 +355,7 @@ function applyPanelWidth() {
   applyColumnsSetting();
 }
 
-// Загрузка свёрнутых групп из storage
+// Load collapsed groups from storage
 function loadCollapsedGroups() {
   return new Promise((resolve) => {
     try {
@@ -397,7 +372,7 @@ function loadCollapsedGroups() {
   });
 }
 
-// Сохранение свёрнутых групп в storage
+// Save collapsed groups to storage
 function storeCollapsedGroups() {
   try {
     if (!chrome.storage || !chrome.storage.sync) return;
@@ -405,7 +380,7 @@ function storeCollapsedGroups() {
   } catch (e) { /* ignore */ }
 }
 
-// Переключение свёрнутости группы
+// Toggle group collapsed state
 function toggleGroupCollapsed(groupId) {
   if (collapsedGroups.has(groupId)) {
     collapsedGroups.delete(groupId);
@@ -443,7 +418,7 @@ function updateToggleAllButton() {
   btn.style.display = hasGroups ? '' : 'none';
 }
 
-// Применение настройки количества столбцов
+// Apply column count setting
 function applyColumnsSetting() {
   if (!shadowRoot) return;
   const content = shadowRoot.getElementById('tabs-panel-content');
@@ -475,7 +450,7 @@ function applyColumnsSetting() {
 }
 
 function recalculateColumnsLayoutSoon() {
-  // Несколько проходов, чтобы поймать фактическую ширину после первого раскрытия.
+  // Several passes to catch actual width after first expansion.
   requestAnimationFrame(() => {
     applyColumnsSetting();
     requestAnimationFrame(() => applyColumnsSetting());
@@ -522,8 +497,9 @@ function applyLanguageUI({ rerenderTabs = false } = {}) {
     peekDrag.setAttribute('aria-label', t('dragMiniButton'));
   }
   if (languageBtn) {
-    languageBtn.textContent = currentLanguage === 'ru' ? 'RU' : 'EN';
-    languageBtn.title = t('languageTitle');
+    languageBtn.textContent = 'EN';
+    languageBtn.title = 'Language: English';
+    languageBtn.style.display = 'none';
   }
   if (colsInput) {
     colsInput.title = t('columnsCountLabel');
@@ -581,24 +557,24 @@ function applyCollapsedPeekPosition() {
   peek.style.top = `${collapsedPeekTop}px`;
 }
 
-// Создание панели с Shadow DOM для изоляции стилей
+// Create panel with Shadow DOM for style isolation
 function createTabsPanel() {
   if (tabsPanel) return;
 
-  // Создаем контейнер панели
+  // Create panel container
   tabsPanel = document.createElement('div');
   tabsPanel.id = 'tabs-extension-panel';
   
-  // Создаем Shadow DOM для изоляции стилей
+  // Create Shadow DOM for style isolation
   shadowRoot = tabsPanel.attachShadow({ mode: 'closed' });
   
-  // Загружаем CSS
+  // Load CSS
   const styleLink = document.createElement('link');
   styleLink.rel = 'stylesheet';
   styleLink.href = chrome.runtime.getURL('content.css');
   shadowRoot.appendChild(styleLink);
   
-  // Создаем контейнер панели
+  // Create panel container
   const panelContainer = document.createElement('div');
   panelContainer.className = 'tabs-panel-container';
   panelContainer.innerHTML = `
@@ -630,7 +606,7 @@ function createTabsPanel() {
       <input type="text" id="tabs-panel-search-input" placeholder="${t('searchPlaceholder')}">
     </div>
     <div id="tabs-panel-content" class="tabs-panel-content">
-      <div class="tabs-loading">Загрузка вкладок...</div>
+      <div class="tabs-loading">Loading tabs...</div>
     </div>
   `;
   
@@ -641,19 +617,19 @@ function createTabsPanel() {
   shadowRoot.appendChild(panelContainer);
   document.body.appendChild(tabsPanel);
 
-  // Применяем стартовое состояние без анимации, чтобы не мигало при инициализации
+  // Apply initial state without animation to prevent flickering during initialization
   updatePanelDomVisibility({ skipAnimation: true });
 
-  // Синхронизируем фактическую видимость из background (по окну) тоже без анимации
+  // Synchronize actual visibility from background (by window) also without animation
   chrome.runtime.sendMessage({ action: 'getPanelVisibility' }).then((response) => {
     if (response && typeof response.visible === 'boolean') {
       setPanelVisibility(response.visible, { notifyBackground: false, skipAnimation: true });
     }
   }).catch(() => {
-    // Если background недоступен, остаёмся в локальном состоянии
+    // If background unavailable, stay in local state
   });
 
-  // Загружаем сохранённые настройки, затем инициализируем остальное
+  // Load saved settings, then initialize the rest
   Promise.all([
     loadStoredColumnsCount(),
     loadStoredSpreadLayoutEnabled(),
@@ -693,26 +669,26 @@ function createTabsPanel() {
     applyLanguageUI({ rerenderTabs: false });
     updatePanelDomVisibility({ skipAnimation: true });
 
-    // Обработчики событий
+    // Event handlers
     setupEventListeners();
     setupResizeHandle();
     setupCollapsedPeekDrag();
 
-    // Применяем настройку количества столбцов (уже с учётом сохранённого значения)
+    // Apply column count setting (already considering saved value)
     applyColumnsSetting();
 
-    // Обновляем значение в инпуте, если он уже есть
+    // Update input value if it already exists
     const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
     if (colsInput) {
       colsInput.value = String(columnsCount);
     }
 
-    // Загружаем вкладки
+    // Load tabs
     loadTabs();
   });
 }
 
-// Настройка обработчиков событий
+// Setup event handlers
 function setupEventListeners() {
   if (!shadowRoot) return;
   
@@ -739,7 +715,8 @@ function setupEventListeners() {
   });
 
   languageToggleBtn?.addEventListener('click', () => {
-    currentLanguage = currentLanguage === 'ru' ? 'en' : 'ru';
+    // Language toggle temporarily disabled (English only)
+    currentLanguage = 'en';
     storeLanguage(currentLanguage);
     applyLanguageUI({ rerenderTabs: true });
   });
@@ -886,7 +863,7 @@ function setupCollapsedPeekDrag() {
   });
 }
 
-// Переключение видимости панели (по клику на стрелку в хедере)
+// Toggle panel visibility (by clicking arrow in header)
 function togglePanel() {
   setPanelVisibility(!panelVisible, { notifyBackground: true });
 }
@@ -898,11 +875,11 @@ let currentWindowId = null;
 let draggedTabId = null;
 let suppressTabClickUntil = 0;
 
-// Управление автоскроллом к активной вкладке
+// Auto-scroll management to active tab
 let suppressAutoScrollRenders = 0;
 let preservedScrollTop = 0;
 
-// Элемент тултипа внутри Shadow DOM
+// Tooltip element inside Shadow DOM
 let tooltipElement = null;
 let tooltipReappearTimeoutId = null;
 
@@ -919,7 +896,7 @@ function ensureTooltipElement() {
 function showTabTooltip(tabItem) {
   if (!tabItem || !shadowRoot) return;
 
-  // Отменяем отложенное появление, если оно было
+  // Cancel delayed appearance if it was set
   if (tooltipReappearTimeoutId) {
     clearTimeout(tooltipReappearTimeoutId);
     tooltipReappearTimeoutId = null;
@@ -933,12 +910,12 @@ function showTabTooltip(tabItem) {
 
   tooltip.textContent = title;
 
-  // Координаты иконки вкладки относительно окна
+  // Tab icon coordinates relative to window
   const rect = tabItem.getBoundingClientRect();
   const centerX = rect.left + rect.width / 2;
   const topY = rect.top - 28;
 
-  // Немного ограничим по краям окна
+  // Limit slightly by window edges
   const padding = 8;
   const maxLeft = window.innerWidth - padding;
   const minLeft = padding;
@@ -960,7 +937,7 @@ function hideTabTooltip() {
   }
 }
 
-// Функция для получения URL иконки (начальный источник)
+// Function to get icon URL (initial source)
 function getFaviconUrl(tab) {
   if (!tab) {
     return getFallbackIcon();
@@ -968,7 +945,7 @@ function getFaviconUrl(tab) {
 
   const tabId = typeof tab.id === 'number' ? tab.id : null;
 
-  // 0. Если для вкладки уже есть закэшированный URL — используем его
+  // 0. If tab already has cached URL - use it
   if (tabId !== null && faviconCache.has(tabId)) {
     const cached = faviconCache.get(tabId);
     console.log('[Tabs Extension] getFaviconUrl: using cached favicon for tab', tabId, cached);
@@ -977,24 +954,24 @@ function getFaviconUrl(tab) {
 
   let resultUrl = null;
 
-  // 1. Сначала пробуем использовать favIconUrl из объекта tab
+  // 1. First try using favIconUrl from tab object
   if (tab.favIconUrl) {
     resultUrl = tab.favIconUrl;
     console.log('[Tabs Extension] getFaviconUrl: using tab.favIconUrl for tab', tabId, resultUrl);
   } else if (tab.url) {
-    // 2. Если favIconUrl нет, пробуем получить через URL
+    // 2. If no favIconUrl, try to get via URL
     try {
       const url = new URL(tab.url);
 
-      // Для chrome:// и chrome-extension:// страниц используем fallback
+      // For chrome:// and chrome-extension:// pages use fallback
       if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
         resultUrl = getFallbackIcon();
         console.log('[Tabs Extension] getFaviconUrl: chrome*/extension page, using fallback for tab', tabId);
       } else {
-        // Для обычных страниц пробуем получить favicon напрямую по URL
+        // For regular pages try to get favicon directly by URL
         const faviconUrls = getFaviconUrlsFromTabUrl(tab.url);
         if (faviconUrls.length > 0) {
-          // Используем Google Favicon Service как первый вариант
+          // Use Google Favicon Service as first option
           resultUrl = faviconUrls.find(u => u.includes('google.com/s2/favicons')) || faviconUrls[0];
           console.log('[Tabs Extension] getFaviconUrl: using URL-derived favicon for tab', tabId, resultUrl);
         } else {
@@ -1008,12 +985,12 @@ function getFaviconUrl(tab) {
       console.log('[Tabs Extension] getFaviconUrl: invalid URL, using fallback for tab', tabId);
     }
   } else {
-    // 3. Нет ни favIconUrl, ни URL — fallback
+    // 3. No favIconUrl or URL - fallback
     resultUrl = getFallbackIcon();
     console.log('[Tabs Extension] getFaviconUrl: no favIconUrl and no URL, using fallback for tab', tabId);
   }
 
-  // Записываем в кэш, чтобы в следующий раз не пересчитывать
+  // Write to cache to avoid recalculation next time
   if (tabId !== null && resultUrl) {
     faviconCache.set(tabId, resultUrl);
     console.log('[Tabs Extension] getFaviconUrl: caching favicon for tab', tabId, resultUrl);
@@ -1022,7 +999,7 @@ function getFaviconUrl(tab) {
   return resultUrl || getFallbackIcon();
 }
 
-// Различные способы получения favicon URL
+// Various methods to get favicon URL
 function isLocalNetworkHost(hostname) {
   if (!hostname) return false;
   const host = hostname.toLowerCase();
@@ -1046,23 +1023,23 @@ function getFaviconUrlsFromTabUrl(tabUrl) {
   try {
     const url = new URL(tabUrl);
     
-    // Пропускаем chrome:// и chrome-extension://
+    // Skip chrome:// and chrome-extension://
     if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
       return [];
     }
     
-    // Важно: не делаем прямые запросы к private/local хостам, чтобы не триггерить
-    // системные запросы доступа к локальной сети в Chrome.
+    // Important: don't make direct requests to private/local hosts to avoid triggering
+    // system requests for local network access in Chrome.
     if (isLocalNetworkHost(url.hostname)) {
       return [];
     }
 
     const urls = [];
 
-    // 1. Google Favicon Service (работает для большинства сайтов)
+    // 1. Google Favicon Service (works for most sites)
     urls.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=32`);
     
-    // 2. DuckDuckGo Favicon Service (альтернатива)
+    // 2. DuckDuckGo Favicon Service (alternative)
     urls.push(`https://icons.duckduckgo.com/ip3/${encodeURIComponent(url.hostname)}.ico`);
     
     return urls;
@@ -1072,10 +1049,10 @@ function getFaviconUrlsFromTabUrl(tabUrl) {
   }
 }
 
-// Асинхронная загрузка favicon для вкладки (для неактивных вкладок)
-// Пробует несколько методов по очереди
+// Async favicon loading for tab (for inactive tabs)
+// Tries several methods in sequence
 async function loadTabFavicon(tabId, imgElement) {
-  // 0. Проверяем кэш: если уже знаем рабочий URL — просто ставим его и выходим
+  // 0. Check cache: if we already know working URL - just set it and exit
   if (typeof tabId === 'number' && faviconCache.has(tabId)) {
     const cachedUrl = faviconCache.get(tabId);
     if (cachedUrl && imgElement.src !== cachedUrl) {
@@ -1086,7 +1063,7 @@ async function loadTabFavicon(tabId, imgElement) {
   }
   
   console.log('[Tabs Extension] Attempting to load favicon for tab', tabId);
-  // Метод 1: Через background script (получение favIconUrl из chrome.tabs)
+  // Method 1: Via background script (get favIconUrl from chrome.tabs)
   try {
     const result = await chrome.runtime.sendMessage({ action: 'getTabFavicon', tabId });
     console.log('[Tabs Extension] Method 1 (background script) result for tab', tabId, result);
@@ -1094,28 +1071,28 @@ async function loadTabFavicon(tabId, imgElement) {
       console.log('[Tabs Extension] loadTabFavicon: no cache, will use background script favicon for tab', tabId, result.favIconUrl);
       imgElement.src = result.favIconUrl;
       faviconCache.set(tabId, result.favIconUrl);
-      return; // Успешно загрузили через background script
+      return; // Successfully loaded via background script
     }
   } catch (e) {
     console.warn('[Tabs Extension] Method 1 failed for tab', tabId, e);
   }
   
-  // Метод 2: Получаем URL вкладки и пробуем загрузить favicon напрямую
+  // Method 2: Get tab URL and try to load favicon directly
   try {
     const tabResult = await chrome.runtime.sendMessage({ action: 'getTabInfo', tabId });
     if (tabResult && tabResult.url) {
       const faviconUrls = getFaviconUrlsFromTabUrl(tabResult.url);
       console.log('[Tabs Extension] Method 2: Trying URLs from tab URL:', faviconUrls);
       
-      // Пробуем установить первый URL (Google Favicon Service обычно самый надежный)
-      // Браузер сам попробует загрузить, обработчик ошибок попробует следующий
+      // Try to set first URL (Google Favicon Service is usually most reliable)
+      // Browser will try to load itself, error handler will try next
       if (faviconUrls.length > 0) {
-        // Используем Google Favicon Service как первый вариант (обычно самый надежный)
+        // Use Google Favicon Service as first option (usually most reliable)
         const preferredUrl = faviconUrls.find(url => url.includes('google.com/s2/favicons')) || faviconUrls[0];
         console.log('[Tabs Extension] loadTabFavicon: no cache, will use URL-derived favicon for tab', tabId, preferredUrl);
         imgElement.src = preferredUrl;
         faviconCache.set(tabId, preferredUrl);
-        // Если загрузка не удастся, обработчик ошибок попробует другие варианты
+        // If load fails, error handler will try other options
         return;
       }
     }
@@ -1126,12 +1103,12 @@ async function loadTabFavicon(tabId, imgElement) {
   console.log('[Tabs Extension] All methods failed for tab', tabId);
 }
 
-// Получить fallback иконку
+// Get fallback icon
 function getFallbackIcon() {
   return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23999" rx="2"/></svg>';
 }
 
-// Загрузка всех вкладок
+// Load all tabs
 async function loadTabs() {
   if (isLoadingTabs) return;
   isLoadingTabs = true;
@@ -1139,7 +1116,7 @@ async function loadTabs() {
   console.log('[Tabs Extension] Loading tabs...');
   console.log('[Tabs Extension] Favicon cache size before loading tabs:', faviconCache.size);
   try {
-    // Получаем текущий windowId
+    // Get current windowId
     if (!currentWindowId) {
       const windowInfo = await chrome.runtime.sendMessage({ action: 'getCurrentWindowId' });
       currentWindowId = windowInfo?.windowId;
@@ -1167,9 +1144,9 @@ async function loadTabs() {
   }
 }
 
-// Прокрутка до активной вкладки
+// Scroll to active tab
 function scrollToActiveTab() {
-  // Прокручиваем только если панель видима
+  // Scroll only if panel is visible
   if (!panelVisible || !shadowRoot) return;
   
   const content = shadowRoot.getElementById('tabs-panel-content');
@@ -1178,25 +1155,25 @@ function scrollToActiveTab() {
   const activeTabItem = shadowRoot.querySelector('.tabs-tab-item.active');
   if (!activeTabItem) return;
   
-  // Прокручиваем до активной вкладки с небольшим отступом сверху
+  // Scroll to active tab with small offset from top
   const contentRect = content.getBoundingClientRect();
   const itemRect = activeTabItem.getBoundingClientRect();
   const scrollTop = content.scrollTop;
   const itemTop = itemRect.top - contentRect.top + scrollTop;
   
-  // Прокручиваем так, чтобы элемент был виден с небольшим отступом
+  // Scroll so element is visible with small offset
   content.scrollTo({
     top: itemTop - 12,
     behavior: 'smooth'
   });
 }
 
-// Отображение вкладок
+// Display tabs
 function renderTabs() {
   const content = shadowRoot?.getElementById('tabs-panel-content');
   if (!content) return;
 
-  // Применяем текущую настройку количества столбцов
+  // Apply current column count setting
   applyColumnsSetting();
 
   if (filteredTabs.length === 0) {
@@ -1214,15 +1191,15 @@ function renderTabs() {
     recalculateColumnsLayoutSoon();
 
     if (suppressAutoScrollRenders > 0) {
-      // Восстанавливаем предыдущую позицию скролла (например, после закрытия вкладки)
+      // Restore previous scroll position (e.g., after closing tab)
       suppressAutoScrollRenders -= 1;
       content.scrollTop = preservedScrollTop;
     } else {
-      // Прокручиваем до активной вкладки после рендеринга
+      // Scroll to active tab after rendering
       setTimeout(() => scrollToActiveTab(), 100);
     }
   }).catch(() => {
-    // Если не удалось получить активную вкладку, просто рендерим без выделения
+    // If failed to get active tab, just render without highlighting
     renderTabsList(content, filteredTabs, null, currentWindowId);
     recalculateColumnsLayoutSoon();
 
@@ -1233,8 +1210,8 @@ function renderTabs() {
   });
 }
 
-// Рендеринг списка вкладок — diff-подход: переиспользуем существующие DOM-элементы,
-// создаём только новые, удаляем лишние, обновляем классы.
+// Rendering tab list - diff approach: reuse existing DOM elements,
+// create only new ones, remove excess, update classes.
 function renderTabsList(container, tabs, activeTab, currentWindowId) {
   if (!container) return;
 
@@ -1242,8 +1219,8 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
   const insertedGroupMarkers = new Set();
   let previousRenderedSection = null; // 'grouped' | 'ungrouped'
 
-  // 1. Собираем желаемый порядок элементов (ключ = "tab-<id>" или "group-<id>")
-  //    Если группа свёрнута — её вкладки не включаются
+  // 1. Collect desired element order (key = "tab-<id>" or "group-<id>")
+  //    If group is collapsed - its tabs are not included
   const desiredOrder = [];
   tabs.forEach(tab => {
     const groupId = typeof tab.groupId === 'number' ? tab.groupId : -1;
@@ -1255,7 +1232,7 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
         previousRenderedSection = 'grouped';
       }
     }
-    // Скрываем вкладки свёрнутых групп
+    // Hide tabs of collapsed groups
     if (groupId !== -1 && collapsedGroups.has(groupId)) {
       previousRenderedSection = 'grouped';
       return;
@@ -1267,7 +1244,7 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     previousRenderedSection = groupId === -1 ? 'ungrouped' : 'grouped';
   });
 
-  // 2. Индексируем существующие DOM-элементы по ключу
+  // 2. Index existing DOM elements by key
   const existingByKey = new Map();
   for (const child of Array.from(container.children)) {
     if (child.classList.contains('tabs-tab-item') && child.dataset.tabId) {
@@ -1279,7 +1256,7 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     }
   }
 
-  // 3. Удаляем элементы, которых больше нет в желаемом списке
+  // 3. Remove elements no longer in desired list
   const desiredKeySet = new Set(desiredOrder.map(d => d.key));
   for (const [key, el] of existingByKey) {
     if (!desiredKeySet.has(key)) {
@@ -1288,13 +1265,13 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     }
   }
 
-  // 4. Проходим по желаемому порядку: переиспользуем или создаём
-  let cursor = container.firstChild; // текущий «следующий ожидаемый» DOM-ребёнок
+  // 4. Go through desired order: reuse or create
+  let cursor = container.firstChild; // current "next expected" DOM child
   for (const entry of desiredOrder) {
     let el = existingByKey.get(entry.key);
 
     if (el) {
-      // Элемент уже существует — обновляем только классы / data-атрибуты
+      // Element already exists - update only classes / data attributes
       if (entry.type === 'tab') {
         updateTabElementInPlace(el, entry.tab, activeTab, currentWindowId);
       } else if (entry.type === 'group') {
@@ -1303,14 +1280,14 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
         updateUngroupedSeparatorInPlace(el);
       }
 
-      // Если элемент не на своём месте в порядке — переставляем
+      // If element not in its place in order - move it
       if (el !== cursor) {
         container.insertBefore(el, cursor);
       } else {
         cursor = el.nextSibling;
       }
     } else {
-      // Элемента нет — создаём новый
+      // Element doesn't exist - create new
       if (entry.type === 'tab') {
         el = createTabElement(entry.tab, activeTab, currentWindowId);
       } else if (entry.type === 'group') {
@@ -1322,14 +1299,14 @@ function renderTabsList(container, tabs, activeTab, currentWindowId) {
     }
   }
 
-  // 5. Удаляем оставшиеся «осиротевшие» узлы (например, placeholder загрузки)
+  // 5. Remove remaining orphaned nodes (e.g., loading placeholder)
   while (cursor) {
     const next = cursor.nextSibling;
     cursor.remove();
     cursor = next;
   }
 
-  // 6. Навешиваем обработчики только на новые элементы (без data-listeners)
+  // 6. Attach listeners only to new elements (without data-listeners)
   attachTabListeners();
   updateToggleAllButton();
 }
@@ -1347,7 +1324,7 @@ function createUngroupedSeparatorElement(separatorId) {
   return el;
 }
 
-// Обновление существующего tab-элемента на месте (без пересоздания <img>)
+// Update existing tab element in place (without recreating <img>)
 function updateTabElementInPlace(el, tab, activeTab, currentWindowId) {
   const isActive = activeTab && tab.id === activeTab.id;
   const isOtherWindow = currentWindowId && tab.windowId !== currentWindowId;
@@ -1368,7 +1345,7 @@ function updateTabElementInPlace(el, tab, activeTab, currentWindowId) {
   if (el.draggable !== true) el.draggable = true;
 }
 
-// Обновление существующего group-marker на месте
+// Update existing group-marker in place
 function updateGroupMarkerInPlace(el, group, activeTab, currentWindowId) {
   const isGroupActive = activeTab && activeTab.groupId === group.id;
   const isOtherWindow = currentWindowId && group.windowId && group.windowId !== currentWindowId;
@@ -1476,7 +1453,7 @@ function createTabElement(tab, activeTab, currentWindowId) {
   const faviconUrl = getFaviconUrl(tab);
   const tabTitle = tab.title || t('noTitle');
 
-  // Создаем элементы через DOM API
+  // Create elements via DOM API
   const tabItem = document.createElement('div');
   let className = 'tabs-tab-item';
   if (isActive) className += ' active';
@@ -1519,12 +1496,12 @@ function createTabElement(tab, activeTab, currentWindowId) {
     const tabId = typeof tab.id === 'number' ? tab.id : null;
     const wasInCacheBefore = tabId !== null ? faviconCache.has(tabId) : false;
 
-    // Сохраняем успешно загруженный URL в кэш, чтобы не пересчитывать / не дёргать background лишний раз
+    // Save successfully loaded URL to cache to avoid recalculation / redundant background calls
     if (tabId !== null) {
       faviconCache.set(tabId, this.src);
     }
 
-    // Логируем только при первом успешном получении иконки для вкладки
+    // Log only on first successful icon retrieval for tab
     if (!this.dataset.loadedLogged) {
       this.dataset.loadedLogged = 'true';
       console.log(
@@ -1559,14 +1536,14 @@ function createTabElement(tab, activeTab, currentWindowId) {
   return tabItem;
 }
 
-// Прикрепление обработчиков для вкладок и групп (только к новым элементам без data-listeners)
+// Attach handlers for tabs and groups (only to new elements without data-listeners)
 function attachTabListeners() {
   if (!shadowRoot) {
     console.error('[Tabs Extension] Shadow root not available');
     return;
   }
 
-  // Обработчики для маркеров групп
+  // Handlers for group markers
   const groupMarkers = shadowRoot.querySelectorAll('.tabs-group-marker:not([data-listeners])');
   groupMarkers.forEach(marker => {
     marker.dataset.listeners = 'true';
@@ -1615,8 +1592,8 @@ function attachTabListeners() {
         const content = shadowRoot?.getElementById('tabs-panel-content');
         if (content) {
           preservedScrollTop = content.scrollTop;
-          // Закрытие вкладки обычно вызывает несколько обновлений подряд.
-          // Подавляем автоскролл к активной вкладке на ближайшие 2 рендера.
+          // Closing tab usually triggers several updates in a row.
+          // Suppress auto-scroll to active tab for next 2 renders.
           suppressAutoScrollRenders = Math.max(suppressAutoScrollRenders, 2);
         }
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
@@ -1749,7 +1726,7 @@ function attachTabListeners() {
   });
 }
 
-// Поиск вкладок
+// Search tabs
 function filterTabs(searchTerm) {
   if (!searchTerm.trim()) {
     filteredTabs = allTabs;
@@ -1764,7 +1741,7 @@ function filterTabs(searchTerm) {
   renderTabs();
 }
 
-// Обработка ошибки загрузки favicon (пробует альтернативные источники)
+// Handle favicon loading error (tries alternative sources)
 function handleFaviconError(img) {
   const tabItem = img.closest('.tabs-tab-item');
   if (!tabItem) {
@@ -1778,48 +1755,48 @@ function handleFaviconError(img) {
   
   console.log('[Tabs Extension] Favicon error, current src:', currentSrc, 'tried:', triedUrls);
   
-  // Добавляем текущий URL в список попробованных
+  // Add current URL to tried list
   if (currentSrc && !triedUrls.includes(currentSrc)) {
     triedUrls.push(currentSrc);
     img.dataset.triedUrls = JSON.stringify(triedUrls);
   }
   
-  // Получаем список альтернативных URL
+  // Get list of alternative URLs
   if (tabUrl) {
     const alternativeUrls = getFaviconUrlsFromTabUrl(tabUrl);
     
-    // Пробуем следующий URL из списка, который еще не пробовали
+    // Try next URL from list that hasn't been tried yet
     for (const url of alternativeUrls) {
       if (!triedUrls.includes(url)) {
         console.log('[Tabs Extension] Trying alternative favicon URL:', url);
         img.src = url;
         triedUrls.push(url);
         img.dataset.triedUrls = JSON.stringify(triedUrls);
-        return; // Пробуем этот URL
+        return; // Try this URL
       }
     }
   }
   
-  // Если все варианты испробованы, показываем fallback
+  // If all options exhausted, show fallback
   console.log('[Tabs Extension] All favicon URLs failed, using fallback');
   img.src = getFallbackIcon();
-  img.onerror = null; // Отключаем дальнейшие попытки
+  img.onerror = null; // Disable further attempts
 
-  // Запоминаем fallback в кэше, чтобы не пытаться перезагружать иконку для этой вкладки
+  // Remember fallback in cache to avoid reloading icon for this tab
   const tabId = parseInt(tabItem.dataset.tabId, 10);
   if (Number.isFinite(tabId)) {
     faviconCache.set(tabId, img.src);
   }
 }
 
-// Экранирование HTML
+// HTML escaping
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
 }
 
-// Показать ошибку
+// Show error
 function showError(message) {
   const content = shadowRoot?.getElementById('tabs-panel-content');
   if (content) {
@@ -1832,12 +1809,12 @@ function showError(message) {
   }
 }
 
-// Синхронизация настроек между вкладками
+// Synchronize settings between tabs
 if (chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync') return;
 
-    // Синхронизация количества столбцов
+    // Synchronize column count
     const colsChange = changes[COLUMNS_STORAGE_KEY];
     if (colsChange) {
       const newValue = colsChange.newValue;
@@ -1858,7 +1835,7 @@ if (chrome.storage && chrome.storage.onChanged) {
       updateLayoutToggleButton();
     }
 
-    // Синхронизация ширины панели
+    // Synchronize panel width
     const widthChange = changes[PANEL_WIDTH_STORAGE_KEY];
     if (widthChange) {
       const newValue = widthChange.newValue;
@@ -1892,7 +1869,7 @@ if (chrome.storage && chrome.storage.onChanged) {
       applyCollapsedPeekPosition();
     }
 
-    // Синхронизация свёрнутых групп
+    // Synchronize collapsed groups
     const groupsChange = changes[COLLAPSED_GROUPS_STORAGE_KEY];
     if (groupsChange) {
       const arr = groupsChange.newValue;
@@ -1906,17 +1883,17 @@ if (chrome.storage && chrome.storage.onChanged) {
   });
 }
 
-// Инициализация при загрузке
+// Initialize on load
 if (document.body) {
   createTabsPanel();
 } else {
   document.addEventListener('DOMContentLoaded', createTabsPanel);
 }
 
-// Слушаем сообщения от background script
+// Listen to messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'togglePanel') {
-    // Поддержка старого действия, если где-то еще используется
+    // Support legacy action if still used somewhere
     togglePanel();
   }
   if (message.action === 'setPanelVisibility') {
@@ -1925,7 +1902,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.action === 'refreshTabs') {
     if (tabsPanel && panelVisible) {
-      // Обновляем только если панель видима и не было недавнего обновления
+      // Update only if panel is visible and there was no recent update
       const now = Date.now();
       if (!window.lastTabRefresh || now - window.lastTabRefresh > 500) {
         window.lastTabRefresh = now;

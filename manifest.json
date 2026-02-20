@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vertical Tabs: compact, float",
   "version": "1.0.0",
-  "description": "Vertical Tabs: compact, float (RU: Вертикальные вкладки: компактные, растяжимые)",
+  "description": "Vertical Tabs: compact, float - Manage all your browser tabs in a vertical panel",
   "permissions": [
     "tabs",
     "tabGroups",

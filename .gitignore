@@ -10,7 +10,7 @@ desktop.ini
 *.swo
 *~
 
-# Node modules (если будете использовать npm)
+# Node modules (if using npm)
 node_modules/
 package-lock.json
 yarn.lock
@@ -31,3 +31,8 @@ yarn-error.log*
 # Environment files
 .env
 .env.local
+
+# Russian text backups (temporary)
+*.russian-backup
+RUSSIAN_TEXT_BACKUP.json
+RESTORE_RUSSIAN_TEXT.md

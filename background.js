@@ -1,9 +1,9 @@
-// Background script для управления вкладками и панелью
+// Background script for managing tabs and panel
 //
-// Состояние видимости панели по окнам (windowId -> boolean)
+// Panel visibility state by windows (windowId -> boolean)
 const panelVisibilityByWindow = {};
 
-// Переключение панели при клике на иконку
+// Toggle panel on icon click
 chrome.action.onClicked.addListener(async (tab) => {
   try {
     const windowId = tab.windowId;
@@ -11,13 +11,13 @@ chrome.action.onClicked.addListener(async (tab) => {
     const newVisible = !currentVisible;
     panelVisibilityByWindow[windowId] = newVisible;
 
-    // Отправляем сообщение в content script для установки состояния панели
+    // Send message to content script to set panel state
     await chrome.tabs.sendMessage(tab.id, {
       action: 'setPanelVisibility',
       visible: newVisible,
     });
   } catch (error) {
-    // Если content script еще не загружен, инжектируем его
+    // If content script not loaded yet, inject it
     try {
       const windowId = tab.windowId;
       const desiredVisible = !!panelVisibilityByWindow[windowId];
@@ -29,24 +29,24 @@ chrome.action.onClicked.addListener(async (tab) => {
         target: { tabId: tab.id },
         files: ['content.css']
       });
-      // Отправляем то же целевое состояние, без повторного toggle
+      // Send same target state, without re-toggling
       await chrome.tabs.sendMessage(tab.id, {
         action: 'setPanelVisibility',
         visible: desiredVisible,
       });
     } catch (err) {
-      console.error('Ошибка инжекции скрипта:', err);
+      console.error('Script injection error:', err);
     }
   }
 });
 
-// Обработка сообщений от content script
+// Handle messages from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'getAllTabs') {
     chrome.tabs.query({}).then(tabs => {
       sendResponse(tabs);
     });
-    return true; // Асинхронный ответ
+    return true; // Async response
   }
 
   if (message.action === 'getAllTabGroups') {
@@ -94,7 +94,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.tabs.get(message.tabId).then(tab => {
       chrome.tabs.update(message.tabId, { active: true });
       chrome.windows.update(tab.windowId, { focused: true }).then(() => {
-        // Обновляем панели во всех окнах после переключения
+        // Update panels in all windows after switching
         setTimeout(() => {
           broadcastToAllTabs({ action: 'refreshTabs' });
         }, 200);
@@ -189,7 +189,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Обновление панели при изменении вкладок
+// Update panel on tab changes
 chrome.tabs.onCreated.addListener(() => {
   broadcastToAllTabs({ action: 'refreshTabs' });
 });
@@ -199,7 +199,7 @@ chrome.tabs.onRemoved.addListener(() => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Обновляем только при изменении favicon или статуса загрузки
+  // Update only on favicon change or loading status
   if (changeInfo.favIconUrl || changeInfo.status === 'complete') {
     broadcastToAllTabs({ action: 'refreshTabs' });
   }
@@ -218,7 +218,7 @@ chrome.tabGroups.onRemoved?.addListener(() => {
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
-  // Обновляем панели при переключении активной вкладки
+  // Update panels when switching active tab
   broadcastToAllTabs({ action: 'refreshTabs' });
 
   const windowId = activeInfo.windowId;
@@ -229,7 +229,7 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
     action: 'setPanelVisibility',
     visible,
   }).catch(() => {
-    // Вкладка может не иметь content script — игнорируем ошибку
+    // Tab may not have content script - ignore error
   });
 });
 
@@ -237,12 +237,12 @@ chrome.tabs.onMoved.addListener(() => {
   broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
-// Отправка сообщения во все вкладки
+// Send message to all tabs
 function broadcastToAllTabs(message) {
   chrome.tabs.query({}).then(tabs => {
     tabs.forEach(tab => {
       chrome.tabs.sendMessage(tab.id, message).catch(() => {
-        // Игнорируем ошибки для вкладок без content script
+        // Ignore errors for tabs without content script
       });
     });
   });

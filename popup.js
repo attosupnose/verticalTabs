@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (actionBtn) {
     actionBtn.addEventListener('click', () => {
       console.log('Button clicked!');
-      // Добавьте свою логику здесь
+      // Add your logic here
     });
   }
 });
