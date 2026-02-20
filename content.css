@@ -185,6 +185,7 @@
   width: 34px;
   height: 30px;
   min-width: 34px;
+  position: relative;
   text-align: center;
   background: linear-gradient(180deg, #ffffff 0%, #f1f3f4 100%);
   border: 1px solid #d2d6dc;
@@ -210,6 +211,20 @@
   background: linear-gradient(180deg, #edf4ff 0%, #d9e7ff 100%);
   border-color: #6ea0ff;
   color: #1a73e8;
+}
+
+.tabs-panel-layout-toggle.is-off::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 14px;
+  height: 2px;
+  background: currentColor;
+  transform: rotate(-22deg);
+  opacity: 0.9;
+  border-radius: 2px;
+  pointer-events: none;
 }
 
 .tabs-panel-icon-btn {

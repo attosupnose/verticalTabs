@@ -438,7 +438,7 @@ function updateToggleAllButton() {
   const allGroupIds = allTabGroups.map(g => g.id);
   const hasGroups = allGroupIds.length > 0;
   const allCollapsed = hasGroups && allGroupIds.every(id => collapsedGroups.has(id));
-  btn.textContent = allCollapsed ? '▸▸' : '▾▾';
+  btn.textContent = allCollapsed ? 'G▸' : 'G▾';
   btn.title = allCollapsed ? t('expandAllGroups') : t('collapseAllGroups');
   btn.style.display = hasGroups ? '' : 'none';
 }
@@ -488,7 +488,8 @@ function updateLayoutToggleButton() {
   const btn = shadowRoot.getElementById('tabs-panel-layout-toggle');
   if (!btn) return;
   btn.classList.toggle('active', spreadLayoutEnabled);
-  btn.textContent = spreadLayoutEnabled ? '↤' : '↔';
+  btn.classList.toggle('is-off', !spreadLayoutEnabled);
+  btn.textContent = '↔';
   btn.title = spreadLayoutEnabled
     ? t('layoutOn')
     : t('layoutOff');
@@ -603,10 +604,9 @@ function createTabsPanel() {
   panelContainer.innerHTML = `
     <div class="tabs-panel-header">
       <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle tabs-panel-header-btn" title="${t('layoutOff')}">↔</button>
-      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('launcherDisabled')}">⌗</button>
+      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all tabs-panel-header-btn" title="${t('collapseAllGroups')}" style="display:none">G▾</button>
       <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('searchToggle')}">⌕</button>
       <button id="tabs-panel-language-toggle" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('languageTitle')}">EN</button>
-      <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all tabs-panel-header-btn" title="${t('collapseAllGroups')}" style="display:none">▾▾</button>
       <input
         type="number"
         id="tabs-panel-cols-input"
@@ -619,6 +619,7 @@ function createTabsPanel() {
       >
       <button id="tabs-panel-toggle" class="tabs-panel-toggle tabs-panel-header-btn" title="${t('collapsePanel')}">❯</button>
       <button id="tabs-panel-refresh" class="tabs-panel-refresh tabs-panel-header-btn" title="${t('refresh')}">↻</button>
+      <button id="tabs-panel-enable-launcher" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('launcherDisabled')}">⌂</button>
     </div>
     <div id="tabs-panel-collapsed-peek" class="tabs-panel-collapsed-peek">
       <div id="tabs-panel-peek-drag" class="tabs-panel-peek-drag" title="${t('dragMiniButton')}" aria-label="${t('dragMiniButton')}">⋮⋮</div>
