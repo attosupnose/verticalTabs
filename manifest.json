@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Все вкладки",
+  "name": "Vertical Tabs: compact, float",
   "version": "1.0.0",
-  "description": "Расширение для просмотра и управления всеми открытыми вкладками",
+  "description": "Vertical Tabs: compact, float (RU: Вертикальные вкладки: компактные, растяжимые)",
   "permissions": [
     "tabs",
     "tabGroups",

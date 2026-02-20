@@ -1,4 +1,4 @@
-# Отладка расширения "Все вкладки"
+# Отладка расширения "Vertical Tabs: compact, float" ("Вертикальные вкладки: компактные, растяжимые")
 
 ## Как открыть DevTools для отладки
 
@@ -12,7 +12,7 @@
 ### 2. Открыть DevTools для Background Script
 
 1. Откройте `chrome://extensions/`
-2. Найдите расширение "Все вкладки"
+2. Найдите расширение "Vertical Tabs: compact, float"
 3. Нажмите на ссылку **"service worker"** (или "background page" для MV2)
 4. Откроется DevTools для background script
 

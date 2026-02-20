@@ -6,7 +6,7 @@
 
 ## RU — Detailed Description
 
-"Все вкладки" — расширение для удобного управления большим количеством открытых вкладок в Chrome.
+"Вертикальные вкладки: компактные, растяжимые" — расширение для удобного управления большим количеством открытых вкладок в Chrome.
 
 ### Основные возможности
 
@@ -47,7 +47,7 @@ A powerful all-tabs side panel for Chrome: fast search, groups, drag-and-drop, a
 
 ## EN — Detailed Description
 
-"All Tabs" helps you manage many open tabs in Chrome with a compact, flexible panel.
+"Vertical Tabs: compact, float" helps you manage many open tabs in Chrome with a compact, flexible panel.
 
 ### Key features
 
