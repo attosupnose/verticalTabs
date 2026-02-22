@@ -84,8 +84,55 @@ const MIN_PANEL_WIDTH = 150;
 const MAX_PANEL_WIDTH = 800;
 let panelWidth = 350;
 let pageShiftApplied = false;
-let originalBodyMarginRight = '';
-let originalBodyTransition = '';
+let shiftedPageRootElements = [];
+
+function clearShiftedPageRoots() {
+  if (!shiftedPageRootElements.length) return;
+  shiftedPageRootElements.forEach((item) => {
+    const { el, marginRight, transition, transform } = item;
+    if (!el || !el.isConnected) return;
+    el.style.marginRight = marginRight;
+    el.style.transform = transform;
+    el.style.transition = transition;
+  });
+  shiftedPageRootElements = [];
+}
+
+function shiftPageRoots() {
+  clearShiftedPageRoots();
+  const body = document.body;
+  if (!body) return;
+
+  const candidates = Array.from(body.children);
+  candidates.forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    if (el.id === 'tabs-extension-panel') return;
+    const tag = el.tagName;
+    if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK') return;
+
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return;
+
+    const prevMarginRight = el.style.marginRight || '';
+    const prevTransform = el.style.transform || '';
+    const prevTransition = el.style.transition || '';
+
+    // Keep left edge stable; reserve space on the right.
+    el.style.marginRight = `${panelWidth}px`;
+    if (!prevTransition.includes('margin-right')) {
+      el.style.transition = prevTransition
+        ? `${prevTransition}, margin-right 0.3s ease`
+        : 'margin-right 0.3s ease';
+    }
+
+    shiftedPageRootElements.push({
+      el,
+      marginRight: prevMarginRight,
+      transform: prevTransform,
+      transition: prevTransition,
+    });
+  });
+}
 
 // Settings for number of columns with tab icons
 const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
@@ -141,32 +188,13 @@ function t(key) {
 const faviconCache = new Map();
 
 function applyPageShift() {
-  const body = document.body;
-  if (!body) return;
-
-  if (!pageShiftApplied) {
-    originalBodyMarginRight = body.style.marginRight;
-    originalBodyTransition = body.style.transition;
-  }
-
-  // Add/extend transition so margin-right is animated
-  const currentTransition = body.style.transition || '';
-  if (!currentTransition.includes('margin-right')) {
-    body.style.transition = currentTransition
-      ? `${currentTransition}, margin-right 0.3s ease`
-      : 'margin-right 0.3s ease';
-  }
-
-  body.style.marginRight = `${panelWidth}px`;
+  shiftPageRoots();
   pageShiftApplied = true;
 }
 
 function removePageShift() {
-  const body = document.body;
-  if (!body || !pageShiftApplied) return;
-
-  body.style.marginRight = originalBodyMarginRight;
-  body.style.transition = originalBodyTransition;
+  if (!pageShiftApplied) return;
+  clearShiftedPageRoots();
   pageShiftApplied = false;
 }
 
@@ -362,8 +390,8 @@ function applyPanelWidth() {
   if (tabsPanel) {
     tabsPanel.style.setProperty('--panel-width', `${panelWidth}px`);
   }
-  if (pageShiftApplied && document.body) {
-    document.body.style.marginRight = `${panelWidth}px`;
+  if (pageShiftApplied) {
+    shiftPageRoots();
   }
   applyColumnsSetting();
 }
@@ -815,6 +843,7 @@ function setupResizeHandle() {
     startWidth = panelWidth;
     handle.classList.add('active');
     document.body.style.transition = 'none';
+    document.documentElement.style.transition = 'none';
     document.body.style.userSelect = 'none';
     document.body.style.webkitUserSelect = 'none';
   });
@@ -836,9 +865,17 @@ function setupResizeHandle() {
     document.body.style.userSelect = '';
     document.body.style.webkitUserSelect = '';
     if (pageShiftApplied) {
-      document.body.style.transition = 'margin-right 0.3s ease';
+      shiftedPageRootElements.forEach(({ el }) => {
+        if (el && el.isConnected) {
+          el.style.transition = 'margin-right 0.3s ease';
+        }
+      });
     } else {
-      document.body.style.transition = '';
+      shiftedPageRootElements.forEach(({ el }) => {
+        if (el && el.isConnected) {
+          el.style.transition = '';
+        }
+      });
     }
     storePanelWidth(panelWidth);
   }, true);
