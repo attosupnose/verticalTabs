@@ -1,4 +1,7 @@
 // Content script for displaying tabs panel at the bottom of the page
+const VT_CONTENT_SCRIPT_GUARD_KEY = '__verticalTabsContentScriptLoadedV3';
+if (!globalThis[VT_CONTENT_SCRIPT_GUARD_KEY]) {
+  globalThis[VT_CONTENT_SCRIPT_GUARD_KEY] = true;
 
 let panelVisible = false;
 let tabsPanel = null;
@@ -167,9 +170,19 @@ function removePageShift() {
   pageShiftApplied = false;
 }
 
-// Load CSS in Shadow DOM
-function loadPanelCSS() {
-  return chrome.runtime.getURL('content.css');
+// Load CSS text and keep it scoped to Shadow DOM
+let panelCssTextPromise = null;
+function loadPanelCSSText() {
+  if (panelCssTextPromise) return panelCssTextPromise;
+  // Prefer CSS text injected by background before executing this file.
+  if (typeof globalThis.__verticalTabsPanelCssText === 'string' && globalThis.__verticalTabsPanelCssText.length > 0) {
+    panelCssTextPromise = Promise.resolve(globalThis.__verticalTabsPanelCssText);
+    return panelCssTextPromise;
+  }
+  panelCssTextPromise = fetch(chrome.runtime.getURL('content.css'))
+    .then((response) => (response.ok ? response.text() : ''))
+    .catch(() => '');
+  return panelCssTextPromise;
 }
 
 // Load saved column count
@@ -568,11 +581,24 @@ function createTabsPanel() {
   // Create Shadow DOM for style isolation
   shadowRoot = tabsPanel.attachShadow({ mode: 'closed' });
   
-  // Load CSS
-  const styleLink = document.createElement('link');
-  styleLink.rel = 'stylesheet';
-  styleLink.href = chrome.runtime.getURL('content.css');
-  shadowRoot.appendChild(styleLink);
+  // Load CSS into Shadow DOM to keep style isolation
+  const styleEl = document.createElement('style');
+  styleEl.id = 'tabs-panel-style';
+  shadowRoot.appendChild(styleEl);
+  loadPanelCSSText().then((cssText) => {
+    const targetStyle = shadowRoot?.getElementById('tabs-panel-style');
+    if (!targetStyle) return;
+    if (cssText) {
+      targetStyle.textContent = cssText;
+    } else {
+      // Minimal fallback to keep panel visible if CSS cannot be loaded.
+      targetStyle.textContent = `
+        :host { position: fixed; top: 0; right: 0; width: 350px; height: 100vh; z-index: 2147483647; background: #fff; border-left: 1px solid #e0e0e0; }
+        .tabs-panel-container { display: flex; flex-direction: column; height: 100%; }
+        .tabs-panel-content { flex: 1; overflow: auto; padding: 8px; }
+      `;
+    }
+  });
   
   // Create panel container
   const panelContainer = document.createElement('div');
@@ -1912,3 +1938,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
+}

@@ -2,6 +2,16 @@
 //
 // Panel visibility state by windows (windowId -> boolean)
 const panelVisibilityByWindow = {};
+let panelCssTextCache = null;
+
+async function getPanelCssText() {
+  if (panelCssTextCache) return panelCssTextCache;
+  const cssUrl = chrome.runtime.getURL('content.css');
+  const response = await fetch(cssUrl);
+  if (!response.ok) return '';
+  panelCssTextCache = await response.text();
+  return panelCssTextCache;
+}
 
 // Toggle panel on icon click
 chrome.action.onClicked.addListener(async (tab) => {
@@ -21,13 +31,17 @@ chrome.action.onClicked.addListener(async (tab) => {
     try {
       const windowId = tab.windowId;
       const desiredVisible = !!panelVisibilityByWindow[windowId];
+      const panelCssText = await getPanelCssText();
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (cssText) => {
+          globalThis.__verticalTabsPanelCssText = cssText || '';
+        },
+        args: [panelCssText],
+      });
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['content.js']
-      });
-      await chrome.tabs.insertCSS({
-        target: { tabId: tab.id },
-        files: ['content.css']
       });
       // Send same target state, without re-toggling
       await chrome.tabs.sendMessage(tab.id, {
