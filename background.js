@@ -37,6 +37,27 @@ async function getPanelCssText() {
   return panelCssTextCache;
 }
 
+// Returns true if the URL is restricted and content scripts cannot be injected.
+function isRestrictedUrl(url) {
+  if (!url) return true;
+  return url.startsWith('chrome://') ||
+         url.startsWith('chrome-extension://') ||
+         url.startsWith('chrome-search://') ||
+         url.startsWith('devtools://') ||
+         url.startsWith('chrome-untrusted://') ||
+         url.startsWith('https://chrome.google.com/webstore') ||
+         url.startsWith('https://chromewebstore.google.com');
+}
+
+// Show a brief badge on the extension icon to indicate the page is restricted.
+function showRestrictedBadge(tabId) {
+  chrome.action.setBadgeText({ text: '!', tabId });
+  chrome.action.setBadgeBackgroundColor({ color: '#ea4335', tabId });
+  setTimeout(() => {
+    chrome.action.setBadgeText({ text: '', tabId });
+  }, 2000);
+}
+
 // Inject content script + CSS into a tab and set panel visibility.
 // Returns true if injection succeeded, false otherwise.
 async function ensureContentScript(tabId, visible) {
@@ -76,13 +97,25 @@ async function ensureContentScript(tabId, visible) {
 
 // Toggle panel on icon click
 chrome.action.onClicked.addListener(async (tab) => {
+  // Check if we can inject into this page before toggling state
+  if (isRestrictedUrl(tab.url)) {
+    showRestrictedBadge(tab.id);
+    return;
+  }
+
   const windowId = tab.windowId;
   const currentVisible = !!panelVisibilityByWindow[windowId];
   const newVisible = !currentVisible;
   panelVisibilityByWindow[windowId] = newVisible;
   savePanelVisibility();
 
-  await ensureContentScript(tab.id, newVisible);
+  const success = await ensureContentScript(tab.id, newVisible);
+  if (!success) {
+    // Injection failed — revert state
+    panelVisibilityByWindow[windowId] = currentVisible;
+    savePanelVisibility();
+    showRestrictedBadge(tab.id);
+  }
 });
 
 // Handle messages from content script
