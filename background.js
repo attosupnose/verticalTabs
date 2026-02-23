@@ -4,6 +4,30 @@
 const panelVisibilityByWindow = {};
 let panelCssTextCache = null;
 
+// Persist panelVisibilityByWindow to storage.session so it survives
+// service worker restarts (MV3 workers can be killed after ~30s idle).
+async function savePanelVisibility() {
+  try {
+    if (chrome.storage && chrome.storage.session) {
+      await chrome.storage.session.set({ panelVisibilityByWindow });
+    }
+  } catch (e) { /* ignore */ }
+}
+
+async function loadPanelVisibility() {
+  try {
+    if (chrome.storage && chrome.storage.session) {
+      const result = await chrome.storage.session.get('panelVisibilityByWindow');
+      if (result && result.panelVisibilityByWindow) {
+        Object.assign(panelVisibilityByWindow, result.panelVisibilityByWindow);
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// Load persisted state when service worker starts
+loadPanelVisibility();
+
 async function getPanelCssText() {
   if (panelCssTextCache) return panelCssTextCache;
   const cssUrl = chrome.runtime.getURL('content.css');
@@ -20,6 +44,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     const currentVisible = !!panelVisibilityByWindow[windowId];
     const newVisible = !currentVisible;
     panelVisibilityByWindow[windowId] = newVisible;
+    savePanelVisibility();
 
     // Send message to content script to set panel state
     await chrome.tabs.sendMessage(tab.id, {
@@ -189,6 +214,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'panelVisibilityChanged') {
     if (sender && sender.tab && typeof sender.tab.windowId === 'number') {
       panelVisibilityByWindow[sender.tab.windowId] = !!message.visible;
+      savePanelVisibility();
     }
     return;
   }
