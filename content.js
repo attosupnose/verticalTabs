@@ -1195,6 +1195,15 @@ async function loadTabs() {
     allTabs = tabs || [];
     allTabGroups = groups || [];
     filteredTabs = allTabs;
+
+    // Prune faviconCache — remove entries for tabs that no longer exist
+    const liveTabIds = new Set(allTabs.map(t => t.id));
+    for (const cachedId of faviconCache.keys()) {
+      if (!liveTabIds.has(cachedId)) {
+        faviconCache.delete(cachedId);
+      }
+    }
+
     updateTotalTabsBadge();
     renderTabs();
   } catch (error) {
