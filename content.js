@@ -1034,7 +1034,6 @@ function getFaviconUrl(tab) {
   // 0. If tab already has cached URL - use it
   if (tabId !== null && faviconCache.has(tabId)) {
     const cached = faviconCache.get(tabId);
-    console.log('[Tabs Extension] getFaviconUrl: using cached favicon for tab', tabId, cached);
     return cached;
   }
 
@@ -1043,7 +1042,6 @@ function getFaviconUrl(tab) {
   // 1. First try using favIconUrl from tab object
   if (tab.favIconUrl) {
     resultUrl = tab.favIconUrl;
-    console.log('[Tabs Extension] getFaviconUrl: using tab.favIconUrl for tab', tabId, resultUrl);
   } else if (tab.url) {
     // 2. If no favIconUrl, try to get via URL
     try {
@@ -1052,34 +1050,27 @@ function getFaviconUrl(tab) {
       // For chrome:// and chrome-extension:// pages use fallback
       if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
         resultUrl = getFallbackIcon();
-        console.log('[Tabs Extension] getFaviconUrl: chrome*/extension page, using fallback for tab', tabId);
       } else {
         // For regular pages try to get favicon directly by URL
         const faviconUrls = getFaviconUrlsFromTabUrl(tab.url);
         if (faviconUrls.length > 0) {
           // Use Google Favicon Service as first option
           resultUrl = faviconUrls.find(u => u.includes('google.com/s2/favicons')) || faviconUrls[0];
-          console.log('[Tabs Extension] getFaviconUrl: using URL-derived favicon for tab', tabId, resultUrl);
         } else {
           resultUrl = getFallbackIcon();
-          console.log('[Tabs Extension] getFaviconUrl: no favicon URLs, using fallback for tab', tabId);
         }
       }
     } catch (e) {
-      console.warn('[Tabs Extension] Invalid URL for tab', tab.id, tab.url, e);
       resultUrl = getFallbackIcon();
-      console.log('[Tabs Extension] getFaviconUrl: invalid URL, using fallback for tab', tabId);
     }
   } else {
     // 3. No favIconUrl or URL - fallback
     resultUrl = getFallbackIcon();
-    console.log('[Tabs Extension] getFaviconUrl: no favIconUrl and no URL, using fallback for tab', tabId);
   }
 
   // Write to cache to avoid recalculation next time
   if (tabId !== null && resultUrl) {
     faviconCache.set(tabId, resultUrl);
-    console.log('[Tabs Extension] getFaviconUrl: caching favicon for tab', tabId, resultUrl);
   }
 
   return resultUrl || getFallbackIcon();
@@ -1130,7 +1121,6 @@ function getFaviconUrlsFromTabUrl(tabUrl) {
     
     return urls;
   } catch (e) {
-    console.warn('[Tabs Extension] Invalid URL for favicon:', tabUrl, e);
     return [];
   }
 }
@@ -1142,25 +1132,21 @@ async function loadTabFavicon(tabId, imgElement) {
   if (typeof tabId === 'number' && faviconCache.has(tabId)) {
     const cachedUrl = faviconCache.get(tabId);
     if (cachedUrl && imgElement.src !== cachedUrl) {
-      console.log('[Tabs Extension] loadTabFavicon: using cached favicon for tab', tabId, cachedUrl);
-      imgElement.src = cachedUrl;
+        imgElement.src = cachedUrl;
     }
     return;
   }
   
-  console.log('[Tabs Extension] Attempting to load favicon for tab', tabId);
   // Method 1: Via background script (get favIconUrl from chrome.tabs)
   try {
     const result = await chrome.runtime.sendMessage({ action: 'getTabFavicon', tabId });
-    console.log('[Tabs Extension] Method 1 (background script) result for tab', tabId, result);
     if (result && result.favIconUrl && imgElement.src !== result.favIconUrl) {
-      console.log('[Tabs Extension] loadTabFavicon: no cache, will use background script favicon for tab', tabId, result.favIconUrl);
       imgElement.src = result.favIconUrl;
       faviconCache.set(tabId, result.favIconUrl);
       return; // Successfully loaded via background script
     }
   } catch (e) {
-    console.warn('[Tabs Extension] Method 1 failed for tab', tabId, e);
+    // Method 1 failed, try next
   }
   
   // Method 2: Get tab URL and try to load favicon directly
@@ -1168,14 +1154,11 @@ async function loadTabFavicon(tabId, imgElement) {
     const tabResult = await chrome.runtime.sendMessage({ action: 'getTabInfo', tabId });
     if (tabResult && tabResult.url) {
       const faviconUrls = getFaviconUrlsFromTabUrl(tabResult.url);
-      console.log('[Tabs Extension] Method 2: Trying URLs from tab URL:', faviconUrls);
-      
       // Try to set first URL (Google Favicon Service is usually most reliable)
       // Browser will try to load itself, error handler will try next
       if (faviconUrls.length > 0) {
         // Use Google Favicon Service as first option (usually most reliable)
         const preferredUrl = faviconUrls.find(url => url.includes('google.com/s2/favicons')) || faviconUrls[0];
-        console.log('[Tabs Extension] loadTabFavicon: no cache, will use URL-derived favicon for tab', tabId, preferredUrl);
         imgElement.src = preferredUrl;
         faviconCache.set(tabId, preferredUrl);
         // If load fails, error handler will try other options
@@ -1183,10 +1166,8 @@ async function loadTabFavicon(tabId, imgElement) {
       }
     }
   } catch (e) {
-    console.warn('[Tabs Extension] Method 2 failed for tab', tabId, e);
+    // Method 2 failed
   }
-  
-  console.log('[Tabs Extension] All methods failed for tab', tabId);
 }
 
 // Get fallback icon
@@ -1199,14 +1180,11 @@ async function loadTabs() {
   if (isLoadingTabs) return;
   isLoadingTabs = true;
   setRefreshButtonLoading(true);
-  console.log('[Tabs Extension] Loading tabs...');
-  console.log('[Tabs Extension] Favicon cache size before loading tabs:', faviconCache.size);
   try {
     // Get current windowId
     if (!currentWindowId) {
       const windowInfo = await chrome.runtime.sendMessage({ action: 'getCurrentWindowId' });
       currentWindowId = windowInfo?.windowId;
-      console.log('[Tabs Extension] Current window ID:', currentWindowId);
     }
     
     const [tabs, groups] = await Promise.all([
@@ -1218,12 +1196,8 @@ async function loadTabs() {
     allTabGroups = groups || [];
     filteredTabs = allTabs;
     updateTotalTabsBadge();
-    console.log('[Tabs Extension] Loaded', allTabs.length, 'tabs');
-    console.log('[Tabs Extension] Loaded', allTabGroups.length, 'tab groups');
-    console.log('[Tabs Extension] Tabs with favIconUrl:', allTabs.filter(t => t.favIconUrl).length);
     renderTabs();
   } catch (error) {
-    console.error('[Tabs Extension] Error loading tabs:', error);
     showError(t('loadFailed'));
   } finally {
     isLoadingTabs = false;
@@ -1578,24 +1552,10 @@ function createTabElement(tab, activeTab, currentWindowId) {
 
   faviconImg.addEventListener('load', function() {
     const tabId = typeof tab.id === 'number' ? tab.id : null;
-    const wasInCacheBefore = tabId !== null ? faviconCache.has(tabId) : false;
 
     // Save successfully loaded URL to cache to avoid recalculation / redundant background calls
     if (tabId !== null) {
       faviconCache.set(tabId, this.src);
-    }
-
-    // Log only on first successful icon retrieval for tab
-    if (!this.dataset.loadedLogged) {
-      this.dataset.loadedLogged = 'true';
-      console.log(
-        '[Tabs Extension] Favicon loaded successfully for tab',
-        tabId,
-        'src:',
-        this.src,
-        '| wasInCacheBefore =',
-        wasInCacheBefore
-      );
     }
   });
 
@@ -1623,7 +1583,6 @@ function createTabElement(tab, activeTab, currentWindowId) {
 // Attach handlers for tabs and groups (only to new elements without data-listeners)
 function attachTabListeners() {
   if (!shadowRoot) {
-    console.error('[Tabs Extension] Shadow root not available');
     return;
   }
 
@@ -1656,8 +1615,8 @@ function attachTabListeners() {
         groupId,
       }).then(() => {
         loadTabs();
-      }).catch((error) => {
-        console.error('[Tabs Extension] Error moving tab to group:', error);
+      }).catch(() => {
+        // Ignore tab group move errors
       });
     });
   });
@@ -1682,16 +1641,14 @@ function attachTabListeners() {
         }
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
           loadTabs();
-        }).catch((error) => {
-          console.error('[Tabs Extension] Error closing tab:', error);
+        }).catch(() => {
+          // Ignore close errors
         });
         return;
       }
 
-      chrome.runtime.sendMessage({ action: 'switchTab', tabId }).then((result) => {
-        console.log('[Tabs Extension] Tab switch result:', result);
-      }).catch((error) => {
-        console.error('[Tabs Extension] Error switching tab:', error);
+      chrome.runtime.sendMessage({ action: 'switchTab', tabId }).catch(() => {
+        // Ignore switch errors
       });
     });
 
@@ -1732,8 +1689,8 @@ function attachTabListeners() {
         beforeTabId: tabId,
       }).then(() => {
         loadTabs();
-      }).catch((error) => {
-        console.error('[Tabs Extension] Error moving tab:', error);
+      }).catch(() => {
+        // Ignore tab move errors
       });
     });
 
@@ -1747,8 +1704,8 @@ function attachTabListeners() {
       }
       chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
         loadTabs();
-      }).catch((error) => {
-        console.error('[Tabs Extension] Error closing tab:', error);
+      }).catch(() => {
+        // Ignore close errors
       });
     });
 
@@ -1782,8 +1739,8 @@ function attachTabListeners() {
 
         chrome.runtime.sendMessage({ action: 'closeTab', tabId }).then(() => {
           loadTabs();
-        }).catch((error) => {
-          console.error('[Tabs Extension] Error closing tab:', error);
+        }).catch(() => {
+          // Ignore close errors
         });
       }
     });
@@ -1837,8 +1794,6 @@ function handleFaviconError(img) {
   const currentSrc = img.src;
   const triedUrls = img.dataset.triedUrls ? JSON.parse(img.dataset.triedUrls) : [];
   
-  console.log('[Tabs Extension] Favicon error, current src:', currentSrc, 'tried:', triedUrls);
-  
   // Add current URL to tried list
   if (currentSrc && !triedUrls.includes(currentSrc)) {
     triedUrls.push(currentSrc);
@@ -1852,7 +1807,6 @@ function handleFaviconError(img) {
     // Try next URL from list that hasn't been tried yet
     for (const url of alternativeUrls) {
       if (!triedUrls.includes(url)) {
-        console.log('[Tabs Extension] Trying alternative favicon URL:', url);
         img.src = url;
         triedUrls.push(url);
         img.dataset.triedUrls = JSON.stringify(triedUrls);
