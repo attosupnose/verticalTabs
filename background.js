@@ -37,46 +37,52 @@ async function getPanelCssText() {
   return panelCssTextCache;
 }
 
+// Inject content script + CSS into a tab and set panel visibility.
+// Returns true if injection succeeded, false otherwise.
+async function ensureContentScript(tabId, visible) {
+  // First, try sending a message (script may already be loaded)
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'setPanelVisibility',
+      visible,
+    });
+    return true;
+  } catch (_) {
+    // Content script not present — inject it
+  }
+  try {
+    const panelCssText = await getPanelCssText();
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (cssText) => {
+        globalThis.__verticalTabsPanelCssText = cssText || '';
+      },
+      args: [panelCssText],
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js']
+    });
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'setPanelVisibility',
+      visible,
+    });
+    return true;
+  } catch (err) {
+    // Restricted page (chrome://, devtools://, etc.) — can't inject
+    return false;
+  }
+}
+
 // Toggle panel on icon click
 chrome.action.onClicked.addListener(async (tab) => {
-  try {
-    const windowId = tab.windowId;
-    const currentVisible = !!panelVisibilityByWindow[windowId];
-    const newVisible = !currentVisible;
-    panelVisibilityByWindow[windowId] = newVisible;
-    savePanelVisibility();
+  const windowId = tab.windowId;
+  const currentVisible = !!panelVisibilityByWindow[windowId];
+  const newVisible = !currentVisible;
+  panelVisibilityByWindow[windowId] = newVisible;
+  savePanelVisibility();
 
-    // Send message to content script to set panel state
-    await chrome.tabs.sendMessage(tab.id, {
-      action: 'setPanelVisibility',
-      visible: newVisible,
-    });
-  } catch (error) {
-    // If content script not loaded yet, inject it
-    try {
-      const windowId = tab.windowId;
-      const desiredVisible = !!panelVisibilityByWindow[windowId];
-      const panelCssText = await getPanelCssText();
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (cssText) => {
-          globalThis.__verticalTabsPanelCssText = cssText || '';
-        },
-        args: [panelCssText],
-      });
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js']
-      });
-      // Send same target state, without re-toggling
-      await chrome.tabs.sendMessage(tab.id, {
-        action: 'setPanelVisibility',
-        visible: desiredVisible,
-      });
-    } catch (err) {
-      console.error('Script injection error:', err);
-    }
-  }
+  await ensureContentScript(tab.id, newVisible);
 });
 
 // Handle messages from content script
@@ -238,9 +244,16 @@ chrome.tabs.onRemoved.addListener(() => {
   broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Update only on favicon change or loading status
-  if (changeInfo.favIconUrl || changeInfo.status === 'complete') {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    // Page finished loading — content script was lost during navigation.
+    // Re-inject if panel should be visible for this window.
+    const visible = !!panelVisibilityByWindow[tab.windowId];
+    if (visible) {
+      await ensureContentScript(tabId, true);
+    }
+    broadcastToAllTabs({ action: 'refreshTabs' });
+  } else if (changeInfo.favIconUrl) {
     broadcastToAllTabs({ action: 'refreshTabs' });
   }
 });
@@ -257,7 +270,7 @@ chrome.tabGroups.onRemoved?.addListener(() => {
   broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
-chrome.tabs.onActivated.addListener((activeInfo) => {
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
   // Update panels when switching active tab
   broadcastToAllTabs({ action: 'refreshTabs' });
 
@@ -265,12 +278,16 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   const tabId = activeInfo.tabId;
   const visible = !!panelVisibilityByWindow[windowId];
 
-  chrome.tabs.sendMessage(tabId, {
-    action: 'setPanelVisibility',
-    visible,
-  }).catch(() => {
-    // Tab may not have content script - ignore error
-  });
+  if (visible) {
+    // Panel should be visible — inject content script if not present yet
+    await ensureContentScript(tabId, true);
+  } else {
+    // Panel hidden — just notify if content script is already there
+    chrome.tabs.sendMessage(tabId, {
+      action: 'setPanelVisibility',
+      visible: false,
+    }).catch(() => {});
+  }
 });
 
 chrome.tabs.onMoved.addListener(() => {
