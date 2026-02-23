@@ -113,6 +113,11 @@ function shiftPageRoots() {
     const style = window.getComputedStyle(el);
     if (style.display === 'none' || style.visibility === 'hidden') return;
 
+    // Skip fixed/absolute elements — marginRight doesn't apply to them
+    // correctly and breaks their positioning (navbars, modals, overlays).
+    const pos = style.position;
+    if (pos === 'fixed' || pos === 'absolute') return;
+
     const prevMarginRight = el.style.marginRight || '';
     const prevTransform = el.style.transform || '';
     const prevTransition = el.style.transition || '';
