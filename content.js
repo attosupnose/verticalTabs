@@ -138,7 +138,7 @@ function shiftPageRoots() {
 const COLUMNS_STORAGE_KEY = 'tabsExtensionColumnsCount';
 let columnsCount = 6;
 const SPREAD_LAYOUT_STORAGE_KEY = 'tabsExtensionSpreadLayoutEnabled';
-let spreadLayoutEnabled = false;
+let spreadLayoutEnabled = true;
 const SPREAD_LAYOUT_TITLE_MIN_CELL_WIDTH = 40;
 
 // Collapsed groups (Set<number> - groupId)
@@ -177,6 +177,7 @@ const I18N = {
     loadFailed: 'Failed to load tabs',
     languageTitle: 'Switch language (RU/EN)',
     columnsCountLabel: 'Number of icon columns',
+    totalTabsLabel: 'Total tabs in all windows',
   },
 };
 
@@ -518,6 +519,7 @@ function applyLanguageUI({ rerenderTabs = false } = {}) {
   const searchToggleBtn = shadowRoot.getElementById('tabs-panel-search-toggle');
   const languageBtn = shadowRoot.getElementById('tabs-panel-language-toggle');
   const colsInput = shadowRoot.getElementById('tabs-panel-cols-input');
+  const totalCount = shadowRoot.getElementById('tabs-panel-total-count');
   const peekExpandBtn = shadowRoot.getElementById('tabs-panel-peek-expand');
   const peekCloseBtn = shadowRoot.getElementById('tabs-panel-peek-close');
   const peekDrag = shadowRoot.getElementById('tabs-panel-peek-drag');
@@ -545,6 +547,11 @@ function applyLanguageUI({ rerenderTabs = false } = {}) {
   if (colsInput) {
     colsInput.title = t('columnsCountLabel');
     colsInput.setAttribute('aria-label', t('columnsCountLabel'));
+  }
+  if (totalCount) {
+    const total = Array.isArray(allTabs) ? allTabs.length : 0;
+    totalCount.title = `${t('totalTabsLabel')}: ${total}`;
+    totalCount.setAttribute('aria-label', `${t('totalTabsLabel')}: ${total}`);
   }
 
   updateLayoutToggleButton();
@@ -574,6 +581,16 @@ function setRefreshButtonLoading(loading) {
   const refreshBtn = shadowRoot.getElementById('tabs-panel-refresh');
   if (!refreshBtn) return;
   refreshBtn.classList.toggle('is-loading', !!loading);
+}
+
+function updateTotalTabsBadge() {
+  if (!shadowRoot) return;
+  const badge = shadowRoot.getElementById('tabs-panel-total-count');
+  if (!badge) return;
+  const total = Array.isArray(allTabs) ? allTabs.length : 0;
+  badge.textContent = total > 999 ? '999+' : String(total);
+  badge.title = `${t('totalTabsLabel')}: ${total}`;
+  badge.setAttribute('aria-label', `${t('totalTabsLabel')}: ${total}`);
 }
 
 function refreshTabsPanel() {
@@ -635,6 +652,7 @@ function createTabsPanel() {
     <div class="tabs-panel-header">
       <button id="tabs-panel-layout-toggle" class="tabs-panel-layout-toggle tabs-panel-header-btn" title="${t('layoutOff')}">↔</button>
       <button id="tabs-panel-toggle-all" class="tabs-panel-toggle-all tabs-panel-header-btn" title="${t('collapseAllGroups')}" style="display:none">G▾</button>
+      <span id="tabs-panel-total-count" class="tabs-panel-total-count" title="${t('totalTabsLabel')}: 0" aria-label="${t('totalTabsLabel')}: 0">0</span>
       <button id="tabs-panel-search-toggle" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('searchToggle')}">⌕</button>
       <button id="tabs-panel-language-toggle" class="tabs-panel-icon-btn tabs-panel-header-btn" title="${t('languageTitle')}">EN</button>
       <input
@@ -1194,6 +1212,7 @@ async function loadTabs() {
     allTabs = tabs || [];
     allTabGroups = groups || [];
     filteredTabs = allTabs;
+    updateTotalTabsBadge();
     console.log('[Tabs Extension] Loaded', allTabs.length, 'tabs');
     console.log('[Tabs Extension] Loaded', allTabGroups.length, 'tab groups');
     console.log('[Tabs Extension] Tabs with favIconUrl:', allTabs.filter(t => t.favIconUrl).length);
@@ -1532,7 +1551,6 @@ function createTabElement(tab, activeTab, currentWindowId) {
   faviconImg.className = 'tabs-tab-favicon';
   faviconImg.src = faviconUrl;
   faviconImg.alt = '';
-  faviconImg.dataset.errorHandled = 'false';
   faviconImg.dataset.tabId = tab.id;
 
   if (
@@ -1548,11 +1566,9 @@ function createTabElement(tab, activeTab, currentWindowId) {
   }
 
   faviconImg.addEventListener('error', function() {
-    console.warn('[Tabs Extension] Favicon load error for tab', tab.id, 'src:', this.src);
-    if (this.dataset.errorHandled === 'false') {
-      this.dataset.errorHandled = 'true';
-      handleFaviconError(this);
-    }
+    // Don't retry for data: URIs (our fallback icon) — prevents infinite loop
+    if (this.src.startsWith('data:')) return;
+    handleFaviconError(this);
   });
 
   faviconImg.addEventListener('load', function() {
@@ -1840,10 +1856,8 @@ function handleFaviconError(img) {
     }
   }
   
-  // If all options exhausted, show fallback
-  console.log('[Tabs Extension] All favicon URLs failed, using fallback');
+  // All options exhausted — show fallback (data: URI won't trigger error)
   img.src = getFallbackIcon();
-  img.onerror = null; // Disable further attempts
 
   // Remember fallback in cache to avoid reloading icon for this tab
   const tabId = parseInt(tabItem.dataset.tabId, 10);
