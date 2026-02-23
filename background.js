@@ -327,13 +327,30 @@ chrome.tabs.onMoved.addListener(() => {
   broadcastToAllTabs({ action: 'refreshTabs' });
 });
 
-// Send message to all tabs
+// Debounced broadcast — coalesces rapid-fire events into a single broadcast.
+// Only sends to tabs in windows where the panel is visible.
+let broadcastTimeoutId = null;
+
 function broadcastToAllTabs(message) {
-  chrome.tabs.query({}).then(tabs => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, message).catch(() => {
-        // Ignore errors for tabs without content script
+  if (broadcastTimeoutId) clearTimeout(broadcastTimeoutId);
+  broadcastTimeoutId = setTimeout(() => {
+    broadcastTimeoutId = null;
+    broadcastToVisibleWindowTabs(message);
+  }, 250);
+}
+
+function broadcastToVisibleWindowTabs(message) {
+  const visibleWindowIds = Object.entries(panelVisibilityByWindow)
+    .filter(([_, visible]) => visible)
+    .map(([id]) => Number(id));
+
+  if (visibleWindowIds.length === 0) return;
+
+  for (const windowId of visibleWindowIds) {
+    chrome.tabs.query({ windowId }).then(tabs => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, message).catch(() => {});
       });
     });
-  });
+  }
 }
