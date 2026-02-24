@@ -1196,11 +1196,13 @@ async function loadTabs() {
     allTabGroups = groups || [];
     filteredTabs = allTabs;
 
-    // Prune faviconCache — remove entries for tabs that no longer exist
-    const liveTabIds = new Set(allTabs.map(t => t.id));
-    for (const cachedId of faviconCache.keys()) {
-      if (!liveTabIds.has(cachedId)) {
-        faviconCache.delete(cachedId);
+    // Prune faviconCache if it grew beyond 500 — drop oldest entries (Map keeps insertion order)
+    const FAVICON_CACHE_MAX = 500;
+    if (faviconCache.size > FAVICON_CACHE_MAX) {
+      const excess = faviconCache.size - FAVICON_CACHE_MAX;
+      const iter = faviconCache.keys();
+      for (let i = 0; i < excess; i++) {
+        faviconCache.delete(iter.next().value);
       }
     }
 
