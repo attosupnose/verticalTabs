@@ -1196,13 +1196,21 @@ async function loadTabs() {
     allTabGroups = groups || [];
     filteredTabs = allTabs;
 
-    // Prune faviconCache if it grew beyond 500 — drop oldest entries (Map keeps insertion order)
-    const FAVICON_CACHE_MAX = 500;
+    // Prune faviconCache: first drop closed tabs, then evict oldest if still over limit
+    // 10k entries ≈ 2 MB — negligible for a browser extension
+    const FAVICON_CACHE_MAX = 10000;
     if (faviconCache.size > FAVICON_CACHE_MAX) {
-      const excess = faviconCache.size - FAVICON_CACHE_MAX;
-      const iter = faviconCache.keys();
-      for (let i = 0; i < excess; i++) {
-        faviconCache.delete(iter.next().value);
+      const liveTabIds = new Set(allTabs.map(t => t.id));
+      for (const cachedId of faviconCache.keys()) {
+        if (!liveTabIds.has(cachedId)) faviconCache.delete(cachedId);
+      }
+      // If still over limit after removing closed tabs, evict oldest
+      if (faviconCache.size > FAVICON_CACHE_MAX) {
+        const excess = faviconCache.size - FAVICON_CACHE_MAX;
+        const iter = faviconCache.keys();
+        for (let i = 0; i < excess; i++) {
+          faviconCache.delete(iter.next().value);
+        }
       }
     }
 
