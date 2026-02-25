@@ -1,7 +1,8 @@
 // Content script for displaying tabs panel at the bottom of the page
-const VT_CONTENT_SCRIPT_GUARD_KEY = '__verticalTabsContentScriptLoadedV3';
-if (!globalThis[VT_CONTENT_SCRIPT_GUARD_KEY]) {
-  globalThis[VT_CONTENT_SCRIPT_GUARD_KEY] = true;
+(() => {
+  const GUARD_KEY = '__verticalTabsContentScriptLoadedV4';
+  if (globalThis[GUARD_KEY]) return;
+  globalThis[GUARD_KEY] = true;
 
 let panelVisible = false;
 let tabsPanel = null;
@@ -1967,4 +1968,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
-}
+})();
